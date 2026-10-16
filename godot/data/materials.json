@@ -1,0 +1,6 @@
+[
+  { "id": "iron_ore", "name": "철광석", "buyPrice": 5, "gatherAmount": 2 },
+  { "id": "coal", "name": "석탄", "buyPrice": 3, "gatherAmount": 3 },
+  { "id": "wood", "name": "나무", "buyPrice": 2, "gatherAmount": 3 },
+  { "id": "leather", "name": "가죽", "buyPrice": 6, "gatherAmount": 0 }
+]

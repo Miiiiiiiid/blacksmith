@@ -161,3 +161,71 @@ public class GameTests
         Assert.Equal(GameRules.VictoryDay + 1, game.State.Day);
     }
 }
+
+public class FlowTests
+{
+    private static Game NewGame(Difficulty difficulty = Difficulty.Normal)
+    {
+        var dataDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "godot", "data");
+        var data = GameData.FromJson(
+            File.ReadAllText(Path.Combine(dataDir, "materials.json")),
+            File.ReadAllText(Path.Combine(dataDir, "items.json")));
+        return Game.NewGame(data, 1, difficulty);
+    }
+
+    [Fact]
+    public void Evening_report_shows_what_changed_today()
+    {
+        var game = NewGame();
+        game.Gather("coal");
+        game.Craft("dagger", 0.8);
+        game.EndDay();
+
+        var report = game.State.LastReport!;
+        Assert.Equal(1, report.Day);
+        Assert.Equal(1, report.Crafted);
+        Assert.Equal(1, report.StatChanges[StatType.Martial], 6);
+        Assert.Equal(1, report.StatChanges[StatType.Strength], 6);
+        Assert.Null(report.Invasion);
+    }
+
+    [Fact]
+    public void Invasion_night_report_carries_the_result()
+    {
+        var game = NewGame();
+        for (var day = 1; day < GameRules.InvasionInterval; day++) game.EndDay();
+        game.State.DeliveredDefense = 1e9;
+        game.EndDay();
+
+        Assert.True(game.State.LastReport!.Invasion!.Defended);
+        Assert.Equal(GameStatus.Playing, game.State.Status);
+        Assert.Contains(game.State.Chronicle, e => e.Text.Contains("막아냈습니다"));
+    }
+
+    [Fact]
+    public void Peaceful_has_no_invasions_and_ends_on_day_thirty()
+    {
+        var game = NewGame(Difficulty.Peaceful);
+        while (game.State.Status == GameStatus.Playing) game.EndDay();
+        Assert.Equal(GameStatus.Victory, game.State.Status);
+        Assert.All(game.State.Chronicle, e => Assert.DoesNotContain("마왕군", e.Text));
+    }
+
+    [Fact]
+    public void Harder_difficulty_starts_with_more_threat()
+    {
+        Assert.True(NewGame(Difficulty.Hard).State.Threat > NewGame(Difficulty.Easy).State.Threat);
+    }
+
+    [Fact]
+    public void Chronicle_records_first_craft_once()
+    {
+        var game = NewGame();
+        game.State.AddMaterial("iron_ore", 5);
+        game.State.AddMaterial("coal", 5);
+        game.State.AddMaterial("wood", 5);
+        game.Craft("dagger", 0.5);
+        game.Craft("dagger", 0.5);
+        Assert.Single(game.State.Chronicle, e => e.Text.Contains("단검"));
+    }
+}

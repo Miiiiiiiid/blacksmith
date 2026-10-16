@@ -16,13 +16,19 @@ public sealed class Game
         State = state;
     }
 
-    public static Game NewGame(GameData data, int seed)
+    public static Game NewGame(GameData data, int seed, Difficulty difficulty = Difficulty.Normal)
     {
-        var state = new GameState { Seed = seed };
+        var settings = DifficultySettings.For(difficulty);
+        var state = new GameState { Seed = seed, Difficulty = difficulty, Threat = settings.StartingThreat };
         foreach (var (id, amount) in GameRules.StartingMaterials)
             if (data.Materials.ContainsKey(id)) state.AddMaterial(id, amount);
-        return new Game(data, state);
+        state.DayStart = DaySnapshot.Take(state);
+        var game = new Game(data, state);
+        game.Chronicle($"마을 변두리에 작은 대장간을 열었습니다. (난이도 {settings.Name})");
+        return game;
     }
+
+    public DifficultySettings Settings => DifficultySettings.For(State.Difficulty);
 
     public ActionResult Gather(string materialId)
     {
@@ -82,6 +88,7 @@ public sealed class Game
 
         var quality = Math.Clamp(score, 0, 1);
         State.Inventory.Add(new CraftedItem { ItemId = item.Id, Quality = quality });
+        State.TotalCrafted++;
 
         if (manual)
         {
@@ -89,6 +96,7 @@ public sealed class Game
                 State.CraftRecords[item.Id] = record = new CraftRecord();
             record.Count++;
             record.BestQuality = Math.Max(record.BestQuality, quality);
+            if (record.Count == 1) Chronicle($"처음으로 {item.Name}을(를) 만들었습니다. 품질 {quality:P0}");
         }
 
         var how = manual ? "만들었습니다" : "자동으로 만들었습니다";
@@ -133,46 +141,75 @@ public sealed class Game
 
     public int DaysUntilInvasion => GameRules.InvasionInterval - (State.Day - 1) % GameRules.InvasionInterval;
 
+    /// <summary>오늘 밤이 침공일인지.</summary>
+    public bool InvasionTonight => Settings.Invasions && State.Day % GameRules.InvasionInterval == 0;
+
     /// <summary>다음 침공을 막을 확률. 납품한 방어력과 위협의 비율로 정한다.</summary>
     public double DefenseChance =>
-        State.DeliveredDefense / (State.DeliveredDefense + State.Threat);
+        State.DeliveredDefense + State.Threat <= 0 ? 1 : State.DeliveredDefense / (State.DeliveredDefense + State.Threat);
 
+    /// <summary>하루를 마친다. 저녁 정산을 만들고, 침공일이면 판정한 뒤 다음 날 아침으로 넘어간다.</summary>
     public ActionResult EndDay()
     {
         if (State.Status != GameStatus.Playing) return Fail("게임이 끝났습니다.");
 
-        var messages = new List<string>();
-        if (State.Day % GameRules.InvasionInterval == 0)
+        var report = BuildReport();
+        State.LastReport = report;
+
+        if (InvasionTonight)
         {
             var chance = DefenseChance;
-            var roll = DeterministicRandom.Roll(State.Seed, State.Day, "invasion");
-            if (roll >= chance)
+            var defended = DeterministicRandom.Roll(State.Seed, State.Day, "invasion") < chance;
+            report.Invasion = new InvasionResult { Chance = chance, Defended = defended };
+            if (!defended)
             {
                 State.Status = GameStatus.GameOver;
+                Chronicle($"마왕군이 마을을 함락했습니다. (방어 확률 {chance:P0})");
                 return Log(new ActionResult(true,
                     $"{State.Day}일째 밤, 마왕군이 마을을 함락했습니다. (방어 확률 {chance:P0}) 게임오버."));
             }
-            messages.Add($"{State.Day}일째 밤, 마왕군의 침공을 막아냈습니다! (방어 확률 {chance:P0})");
+            Chronicle($"마왕군의 침공을 막아냈습니다. (방어 확률 {chance:P0})");
             State.Threat *= GameRules.ThreatReliefOnDefense;
             State.DeliveredDefense = 0;
             State.Stats.ChangeFame(5);
+            report.FameChange += 5;
         }
 
         State.Day++;
         State.ActionsLeft = GameRules.ActionsPerDay;
-        State.Threat += GameRules.ThreatPerDay;
+        State.Threat += Settings.ThreatPerDay;
+        State.DayStart = DaySnapshot.Take(State);
 
         if (State.Day > GameRules.VictoryDay)
         {
             State.Status = GameStatus.Victory;
-            messages.Add($"{GameRules.VictoryDay}일을 버텨냈습니다. 승리!");
+            Chronicle(Settings.Invasions
+                ? $"{GameRules.VictoryDay}일 동안 마을을 지켜냈습니다."
+                : $"{GameRules.VictoryDay}일 동안 대장간을 꾸려냈습니다.");
+            return Log(new ActionResult(true, $"{GameRules.VictoryDay}일을 버텨냈습니다. 승리!"));
         }
-        else
-        {
-            messages.Add($"{State.Day}일째 아침이 밝았습니다.");
-        }
-        return Log(new ActionResult(true, string.Join(" ", messages)));
+
+        var defendedText = report.Invasion is { } inv ? $"마왕군의 침공을 막아냈습니다! (방어 확률 {inv.Chance:P0}) " : "";
+        return Log(new ActionResult(true, $"{defendedText}{State.Day}일째 아침이 밝았습니다."));
     }
+
+    private DayReport BuildReport()
+    {
+        var start = State.DayStart;
+        return new DayReport
+        {
+            Day = State.Day,
+            GoldChange = State.Gold - start.Gold,
+            StatChanges = State.Stats.Values
+                .Select(kv => (kv.Key, Change: kv.Value - start.Stats.GetValueOrDefault(kv.Key)))
+                .Where(c => Math.Abs(c.Change) > 1e-9)
+                .ToDictionary(c => c.Key, c => c.Change),
+            FameChange = State.Stats.Fame - start.Fame,
+            Crafted = State.TotalCrafted - start.Crafted,
+        };
+    }
+
+    private void Chronicle(string text) => State.Chronicle.Add(new ChronicleEntry { Day = State.Day, Text = text });
 
     private ActionResult? Blocked()
     {

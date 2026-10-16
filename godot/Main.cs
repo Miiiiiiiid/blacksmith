@@ -6,207 +6,178 @@ using Godot;
 namespace Blacksmith;
 
 /// <summary>
-/// 프로토타입 화면. 게임 규칙은 전부 Core에 있고, 여기서는 보여주고 입력만 받는다.
-/// 버튼만 있는 임시 UI이며 도트 아트는 나중에 입힌다.
+/// 게임 흐름을 잇는다. 타이틀 → 난이도 → 인트로 → 하루 루프(행동 → 저녁 정산) → 엔딩·연대기 → 타이틀.
+/// 화면마다 지금 화면을 지우고 새로 만든다.
 /// </summary>
 public partial class Main : Control
 {
     private const string SavePath = "user://save.json";
 
     private GameData _data = null!;
-    private Game _game = null!;
-
-    private Label _status = null!;
-    private Label _stats = null!;
-    private VBoxContainer _actions = null!;
-    private VBoxContainer _inventory = null!;
-    private RichTextLabel _log = null!;
+    private Game? _game;
 
     public override void _Ready()
     {
+        RenderingServer.SetDefaultClearColor(new Color(0.11f, 0.11f, 0.12f));
         _data = GameData.FromJson(
             Godot.FileAccess.GetFileAsString("res://data/materials.json"),
             Godot.FileAccess.GetFileAsString("res://data/items.json"));
-
-        BuildLayout();
-        if (!TryLoad()) StartNewGame();
-        Refresh();
+        ShowTitle();
     }
 
-    private void StartNewGame()
+    private Game? LoadSave()
     {
-        _game = Game.NewGame(_data, (int)GD.Randi());
-        Save();
-    }
-
-    private bool TryLoad()
-    {
-        if (!Godot.FileAccess.FileExists(SavePath)) return false;
+        if (!Godot.FileAccess.FileExists(SavePath)) return null;
         try
         {
-            _game = new Game(_data, SaveSystem.Deserialize(Godot.FileAccess.GetFileAsString(SavePath)));
-            return true;
+            return new Game(_data, SaveSystem.Deserialize(Godot.FileAccess.GetFileAsString(SavePath)));
         }
         catch (Exception e)
         {
-            GD.PushWarning($"저장 파일을 읽지 못해 새 게임을 시작합니다: {e.Message}");
-            return false;
+            GD.PushWarning($"저장 파일을 읽지 못했습니다: {e.Message}");
+            return null;
         }
     }
 
     /// <summary>상시 저장. 행동할 때마다 덮어쓴다.</summary>
     private void Save()
     {
+        if (_game == null) return;
         using var file = Godot.FileAccess.Open(SavePath, Godot.FileAccess.ModeFlags.Write);
         file.StoreString(SaveSystem.Serialize(_game.State));
     }
 
-    private void Do(Func<ActionResult> action)
+    private void Clear()
     {
-        var result = action();
-        if (!result.Ok) _log.AppendText($"[color=#d66]{result.Message}[/color]\n");
-        Save();
-        Refresh();
+        foreach (var child in GetChildren()) child.QueueFree();
     }
 
-    private void BuildLayout()
+    private void ShowTitle()
     {
-        var margin = new MarginContainer();
-        margin.SetAnchorsPreset(LayoutPreset.FullRect);
-        foreach (var side in new[] { "left", "right", "top", "bottom" })
-            margin.AddThemeConstantOverride($"margin_{side}", 16);
-        AddChild(margin);
+        Clear();
+        var saved = LoadSave();
+        var canContinue = saved?.State.Status == GameStatus.Playing;
 
-        var columns = new HBoxContainer();
-        columns.AddThemeConstantOverride("separation", 24);
-        margin.AddChild(columns);
+        var box = UiText.CenteredPanel(this, 420, dim: false);
+        box.AddChild(UiText.Title("대장장이 (가제)", 36));
+        box.AddChild(new Label { Text = "프로토타입", HorizontalAlignment = HorizontalAlignment.Center });
+        box.AddChild(new HSeparator());
 
-        var left = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        var right = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        columns.AddChild(left);
-        columns.AddChild(right);
-
-        _status = new Label();
-        _stats = new Label();
-        _actions = new VBoxContainer();
-        left.AddChild(_status);
-        left.AddChild(_stats);
-        left.AddChild(new HSeparator());
-        left.AddChild(_actions);
-
-        right.AddChild(new Label { Text = "보관 중인 물건" });
-        _inventory = new VBoxContainer();
-        right.AddChild(_inventory);
-        right.AddChild(new HSeparator());
-        _log = new RichTextLabel
+        if (canContinue)
         {
-            BbcodeEnabled = true,
-            ScrollFollowing = true,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-        };
-        right.AddChild(_log);
-    }
-
-    private void Refresh()
-    {
-        var s = _game.State;
-        var materials = string.Join(", ", _data.Materials.Values.Select(m => $"{m.Name} {s.MaterialCount(m.Id)}"));
-        _status.Text =
-            $"{s.Day}일째 · 남은 행동 {s.ActionsLeft} · {s.Gold} 골드\n" +
-            $"마왕군 위협 {s.Threat:0} · 납품 방어력 {s.DeliveredDefense:0.#} · " +
-            $"다음 침공까지 {_game.DaysUntilInvasion}일 (방어 확률 {_game.DefenseChance:P0})\n" +
-            $"재료: {materials}";
-
-        var st = s.Stats;
-        _stats.Text =
-            $"힘 {st[StatType.Strength]:0.0} ↔ 섬세함 {st[StatType.Finesse]:0.0}\n" +
-            $"화술 {st[StatType.Eloquence]:0.0} ↔ 패기 {st[StatType.Boldness]:0.0}\n" +
-            $"무학 {st[StatType.Martial]:0.0} ↔ 학문 {st[StatType.Scholarship]:0.0}\n" +
-            $"명성 {st.Fame:+0;-0;0}";
-
-        Clear(_actions);
-        if (s.Status != GameStatus.Playing)
-        {
-            _actions.AddChild(new Label { Text = s.Status == GameStatus.Victory ? "승리!" : "게임오버" });
-            AddButton(_actions, "새 게임", () => { StartNewGame(); _log.Clear(); Refresh(); });
-        }
-        else
-        {
-            var gather = Row(_actions, "채집");
-            foreach (var m in _data.Materials.Values.Where(m => m.GatherAmount > 0))
-                AddButton(gather, $"{m.Name} +{m.GatherAmount}", () => Do(() => _game.Gather(m.Id)));
-
-            var buy = Row(_actions, "구매");
-            foreach (var m in _data.Materials.Values)
-                AddButton(buy, $"{m.Name} ({_game.BuyCost(m, 1)}G)", () => Do(() => _game.Buy(m.Id, 1)));
-
-            _actions.AddChild(new Label { Text = "제작" });
-            foreach (var item in _data.Items.Values)
+            var state = saved!.State;
+            var resume = UiText.Button(box, $"이어하기 ({state.Day}일째 아침)", () =>
             {
-                var canCraft = _game.CanCraft(item.Id) && s.ActionsLeft > 0;
-                var row = Row(_actions, $"  {item.Name}");
-                AddButton(row, "만들기", () => OpenForging(item)).Disabled = !canCraft;
-                if (_game.AutoCraftQuality(item.Id) is { } autoQuality)
-                    AddButton(row, $"자동 {autoQuality:P0}", () => Do(() => _game.CraftAuto(item.Id))).Disabled = !canCraft;
-                // 필요한 재료를 "가진 수/필요한 수"로 보여주고, 모자라면 빨갛게 표시한다.
-                var needs = new RichTextLabel { BbcodeEnabled = true, FitContent = true, AutowrapMode = TextServer.AutowrapMode.Off, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-                needs.Text = string.Join("  ", item.Materials.Select(m =>
-                {
-                    var have = s.MaterialCount(m.Key);
-                    var text = $"{_data.Materials[m.Key].Name} {have}/{m.Value}";
-                    return have >= m.Value ? text : $"[color=#e07070]{text}[/color]";
-                }));
-                row.AddChild(needs);
-            }
-
-            AddButton(_actions, "하루 마치기", () => Do(_game.EndDay));
-            AddButton(_actions, "처음부터 다시", () => { StartNewGame(); Refresh(); });
+                _game = saved;
+                ShowPlay();
+            });
+            resume.CallDeferred(Control.MethodName.GrabFocus);
         }
 
-        Clear(_inventory);
-        for (var i = 0; i < s.Inventory.Count; i++)
+        // 진행 중인 게임이 있으면 실수로 지우지 않게 한 번 더 누르게 한다.
+        var armed = !canContinue;
+        Button newGame = null!;
+        newGame = UiText.Button(box, "새 게임", () =>
         {
-            var index = i;
-            var crafted = s.Inventory[i];
-            var row = Row(_inventory, $"{_data.Items[crafted.ItemId].Name} (품질 {crafted.Quality:P0})");
-            AddButton(row, $"판매 {_game.SellPrice(crafted)}G", () => Do(() => _game.Sell(index)));
-            if (_game.DefenseValue(crafted) > 0)
-                AddButton(row, $"납품 +{_game.DefenseValue(crafted):0.#}", () => Do(() => _game.Deliver(index)));
+            if (!armed)
+            {
+                armed = true;
+                newGame.Text = "새 게임 (한 번 더 누르면 기존 저장을 지웁니다)";
+                return;
+            }
+            ShowDifficulty();
+        });
+        if (!canContinue) newGame.CallDeferred(Control.MethodName.GrabFocus);
+
+        UiText.Button(box, "끝내기", () => GetTree().Quit());
+    }
+
+    private void ShowDifficulty()
+    {
+        Clear();
+        var box = UiText.CenteredPanel(this, 520, dim: false);
+        box.AddChild(UiText.Title("난이도", 28));
+        foreach (var difficulty in Enum.GetValues<Difficulty>())
+        {
+            var settings = DifficultySettings.For(difficulty);
+            var row = new HBoxContainer();
+            var button = new Button { Text = settings.Name, CustomMinimumSize = new Vector2(120, 0) };
+            button.Pressed += () => ShowIntro(difficulty);
+            row.AddChild(button);
+            row.AddChild(new Label { Text = settings.Description, AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill });
+            box.AddChild(row);
+            if (difficulty == Difficulty.Normal) button.CallDeferred(Control.MethodName.GrabFocus);
         }
-
-        _log.Clear();
-        foreach (var line in s.Log.TakeLast(30)) _log.AppendText(line + "\n");
+        UiText.Button(box, "돌아가기", ShowTitle);
     }
 
-    /// <summary>제작 미니게임을 띄운다. 재료와 행동은 미니게임을 끝냈을 때만 쓴다.</summary>
-    private void OpenForging(ItemDef item)
+    private void ShowIntro(Difficulty difficulty)
     {
-        GetViewport().GuiReleaseFocus();
-        AddChild(ForgingPanel.Create(
-            item.Name,
-            _game.State.Stats[StatType.Strength],
-            quality => Do(() => _game.Craft(item.Id, quality)),
-            () => { }));
+        _game = Game.NewGame(_data, (int)GD.Randi(), difficulty);
+        Save();
+
+        Clear();
+        var box = UiText.CenteredPanel(this, 600, dim: false);
+        box.AddChild(UiText.Title("변두리의 작은 대장간", 26));
+        var story = _game.Settings.Invasions
+            ? "북쪽에서 마왕군이 내려온다는 소식이 돈 지 한 달. 당신은 마을 변두리에 작은 대장간을 열었습니다.\n\n" +
+              $"마왕군은 {GameRules.InvasionInterval}일마다 마을을 덮칩니다. 무기를 만들어 왕국군에 납품하면 마을을 지킬 수 있고, " +
+              "팔면 돈이 됩니다. 무엇을 만들고 무엇을 익힐지에 따라 당신이 걷는 길이 달라집니다.\n\n" +
+              $"{GameRules.VictoryDay}일을 버텨내세요."
+            : "전쟁 소문도 없는 조용한 마을. 당신은 마을 변두리에 작은 대장간을 열었습니다.\n\n" +
+              "무엇을 만들고 무엇을 익힐지에 따라 당신이 걷는 길이 달라집니다.\n\n" +
+              $"{GameRules.VictoryDay}일 동안 대장간을 꾸려보세요.";
+        box.AddChild(new Label { Text = story, AutowrapMode = TextServer.AutowrapMode.WordSmart });
+        UiText.Button(box, "첫날 아침", ShowPlay).CallDeferred(Control.MethodName.GrabFocus);
     }
 
-    private static HBoxContainer Row(Container parent, string title)
+    private void ShowPlay()
     {
-        var row = new HBoxContainer();
-        row.AddChild(new Label { Text = title, CustomMinimumSize = new Vector2(220, 0) });
-        parent.AddChild(row);
-        return row;
+        Clear();
+        AddChild(PlayView.Create(_game!, Save, EndDay, ShowTitle));
     }
 
-    private static Button AddButton(Container parent, string text, Action onPressed)
+    /// <summary>하루를 마치고 저녁 정산을 띄운다. 정산을 닫으면 다음 날 아침이나 엔딩으로 간다.</summary>
+    private void EndDay()
     {
-        var button = new Button { Text = text };
-        button.Pressed += onPressed;
-        parent.AddChild(button);
-        return button;
+        var game = _game!;
+        game.EndDay();
+        Save();
+        AddChild(EveningPanel.Create(game.State.LastReport!, game.State.Gold, () =>
+        {
+            if (game.State.Status == GameStatus.Playing) ShowPlay();
+            else ShowEnding();
+        }));
     }
 
-    private static void Clear(Node node)
+    private void ShowEnding()
     {
-        foreach (var child in node.GetChildren()) child.QueueFree();
+        Clear();
+        var state = _game!.State;
+        var won = state.Status == GameStatus.Victory;
+
+        var box = UiText.CenteredPanel(this, 720, dim: false);
+        var title = UiText.Title(won ? "버텨냈다" : "게임오버", 32);
+        title.AddThemeColorOverride("font_color", won ? new Color(0.95f, 0.8f, 0.45f) : new Color(0.9f, 0.4f, 0.4f));
+        box.AddChild(title);
+
+        var days = won ? GameRules.VictoryDay : state.Day;
+        var top = state.Stats.Values.OrderByDescending(kv => kv.Value).First();
+        box.AddChild(new Label
+        {
+            Text = $"{days}일 · {state.Gold} 골드 · 만든 물건 {state.TotalCrafted}개 · 명성 {UiText.Signed(state.Stats.Fame)}\n" +
+                   "능력치 " + string.Join(", ", state.Stats.Values.Select(kv => $"{UiText.StatNames[kv.Key]} {kv.Value:0.#}")) + "\n" +
+                   $"가장 갈고닦은 것: {UiText.StatNames[top.Key]}",
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+
+        box.AddChild(new HSeparator());
+        box.AddChild(new Label { Text = "연대기" });
+        var chronicle = new RichTextLabel { BbcodeEnabled = true, CustomMinimumSize = new Vector2(0, 280) };
+        foreach (var entry in state.Chronicle)
+            chronicle.AppendText($"[color=#aaa]{entry.Day}일[/color]  {entry.Text}\n");
+        box.AddChild(chronicle);
+
+        UiText.Button(box, "타이틀로", ShowTitle).CallDeferred(Control.MethodName.GrabFocus);
     }
 }

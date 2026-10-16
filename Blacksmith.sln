@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlacksmithCore", "Core\Blac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlacksmithCore.Tests", "Core.Tests\BlacksmithCore.Tests.csproj", "{BB7D6709-C2F9-4A6C-990B-8D9B983B35CD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blacksmith", "godot\Blacksmith.csproj", "{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{BB7D6709-C2F9-4A6C-990B-8D9B983B35CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BB7D6709-C2F9-4A6C-990B-8D9B983B35CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BB7D6709-C2F9-4A6C-990B-8D9B983B35CD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Release|Any CPU.Build.0 = Debug|Any CPU
 	EndGlobalSection
 EndGlobal

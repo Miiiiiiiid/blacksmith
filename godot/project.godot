@@ -16,3 +16,4 @@ window/stretch/mode="canvas_items"
 [dotnet]
 
 project/assembly_name="Blacksmith"
+project/solution_directory="../"

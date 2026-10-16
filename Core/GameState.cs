@@ -9,6 +9,13 @@ public sealed class CraftedItem
     public double Quality { get; set; }
 }
 
+/// <summary>품목별로 직접 만든 횟수와 최고 품질. 자동 제작에 쓴다.</summary>
+public sealed class CraftRecord
+{
+    public int Count { get; set; }
+    public double BestQuality { get; set; }
+}
+
 /// <summary>저장되는 게임의 모든 상태. 여기에만 상태를 두어야 상시 저장이 단순해진다.</summary>
 public sealed class GameState
 {
@@ -19,6 +26,7 @@ public sealed class GameState
     public Stats Stats { get; set; } = new();
     public Dictionary<string, int> Materials { get; set; } = new();
     public List<CraftedItem> Inventory { get; set; } = new();
+    public Dictionary<string, CraftRecord> CraftRecords { get; set; } = new();
 
     public double Threat { get; set; } = GameRules.StartingThreat;
     /// <summary>다음 침공 전까지 왕국군에 납품한 방어력 합.</summary>

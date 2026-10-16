@@ -18,6 +18,11 @@ public static class GameRules
     /// <summary>침공을 막으면 위협이 이만큼 비율로 줄어든다.</summary>
     public const double ThreatReliefOnDefense = 0.5;
 
+    /// <summary>같은 품목을 이만큼 직접 만들면 미니게임을 건너뛸 수 있다.</summary>
+    public const int AutoCraftAfter = 3;
+    /// <summary>자동 제작 품질 = 최고 기록 × 이 비율.</summary>
+    public const double AutoCraftRatio = 0.8;
+
     /// <summary>제작 품질(0~1)이 가격에 주는 배율. 품질 0이면 0.5배, 1이면 2배.</summary>
     public static double QualityPriceMultiplier(double quality) => 0.5 + 1.5 * quality;
 }

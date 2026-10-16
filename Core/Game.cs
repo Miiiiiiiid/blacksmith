@@ -50,8 +50,22 @@ public sealed class Game
         Data.Items.TryGetValue(itemId, out var item)
         && item.Materials.All(m => State.MaterialCount(m.Key) >= m.Value);
 
-    /// <param name="minigameScore">제작 미니게임 점수 0~1. 미니게임이 만들어지기 전에는 임시 값을 넣는다.</param>
-    public ActionResult Craft(string itemId, double minigameScore)
+    /// <param name="minigameScore">제작 미니게임 점수 0~1.</param>
+    public ActionResult Craft(string itemId, double minigameScore) => CraftInternal(itemId, minigameScore, manual: true);
+
+    /// <summary>자동 제작 품질. 아직 충분히 만들어보지 않았으면 null.</summary>
+    public double? AutoCraftQuality(string itemId) =>
+        State.CraftRecords.TryGetValue(itemId, out var record) && record.Count >= GameRules.AutoCraftAfter
+            ? record.BestQuality * GameRules.AutoCraftRatio
+            : null;
+
+    /// <summary>미니게임 없이 최고 기록의 일정 비율 품질로 만든다.</summary>
+    public ActionResult CraftAuto(string itemId) =>
+        AutoCraftQuality(itemId) is { } quality
+            ? CraftInternal(itemId, quality, manual: false)
+            : Fail($"{GameRules.AutoCraftAfter}번 이상 직접 만들어야 자동으로 만들 수 있습니다.");
+
+    private ActionResult CraftInternal(string itemId, double score, bool manual)
     {
         if (Blocked() is { } blocked) return blocked;
         if (!Data.Items.TryGetValue(itemId, out var item)) return Fail("알 수 없는 품목입니다.");
@@ -60,9 +74,19 @@ public sealed class Game
         foreach (var (materialId, amount) in item.Materials)
             State.Materials[materialId] -= amount;
 
-        var quality = Math.Clamp(minigameScore, 0, 1);
+        var quality = Math.Clamp(score, 0, 1);
         State.Inventory.Add(new CraftedItem { ItemId = item.Id, Quality = quality });
-        return Spend(item.TrainsStat, $"{item.Name}을(를) 만들었습니다. 품질 {quality:P0}");
+
+        if (manual)
+        {
+            if (!State.CraftRecords.TryGetValue(item.Id, out var record))
+                State.CraftRecords[item.Id] = record = new CraftRecord();
+            record.Count++;
+            record.BestQuality = Math.Max(record.BestQuality, quality);
+        }
+
+        var how = manual ? "만들었습니다" : "자동으로 만들었습니다";
+        return Spend(item.TrainsStat, $"{item.Name}을(를) {how}. 품질 {quality:P0}");
     }
 
     public int SellPrice(CraftedItem crafted) =>

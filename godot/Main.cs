@@ -143,9 +143,15 @@ public partial class Main : Control
             var craft = Row(_actions, "제작");
             foreach (var item in _data.Items.Values)
             {
-                var button = AddButton(craft, item.Name, () => Do(() => _game.Craft(item.Id, PlaceholderMinigameScore())));
-                button.Disabled = !_game.CanCraft(item.Id);
+                var canCraft = _game.CanCraft(item.Id) && s.ActionsLeft > 0;
+                var button = AddButton(craft, item.Name, () => OpenForging(item));
+                button.Disabled = !canCraft;
                 button.TooltipText = string.Join(", ", item.Materials.Select(m => $"{_data.Materials[m.Key].Name} {m.Value}"));
+                if (_game.AutoCraftQuality(item.Id) is { } autoQuality)
+                {
+                    var auto = AddButton(craft, $"자동 {autoQuality:P0}", () => Do(() => _game.CraftAuto(item.Id)));
+                    auto.Disabled = !canCraft;
+                }
             }
 
             AddButton(_actions, "하루 마치기", () => Do(_game.EndDay));
@@ -166,9 +172,16 @@ public partial class Main : Control
         foreach (var line in s.Log.TakeLast(30)) _log.AppendText(line + "\n");
     }
 
-    /// <summary>제작 미니게임이 생기기 전까지 쓰는 임시 품질. 힘이 높을수록 평균이 오른다.</summary>
-    private double PlaceholderMinigameScore() =>
-        Math.Clamp(0.3 + GD.Randf() * 0.4 + _game.State.Stats[StatType.Strength] / GameRules.StatMax * 0.3, 0, 1);
+    /// <summary>제작 미니게임을 띄운다. 재료와 행동은 미니게임을 끝냈을 때만 쓴다.</summary>
+    private void OpenForging(ItemDef item)
+    {
+        GetViewport().GuiReleaseFocus();
+        AddChild(ForgingPanel.Create(
+            item.Name,
+            _game.State.Stats[StatType.Strength],
+            quality => Do(() => _game.Craft(item.Id, quality)),
+            () => { }));
+    }
 
     private static HBoxContainer Row(Container parent, string title)
     {

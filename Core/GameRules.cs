@@ -10,6 +10,11 @@ public static class GameRules
     public const double FameMax = 100;
 
     public const int StartingGold = 50;
+    /// <summary>시작 재료. 첫날 바로 단검 하나는 만들어볼 수 있게 한다.</summary>
+    public static readonly IReadOnlyDictionary<string, int> StartingMaterials = new Dictionary<string, int>
+    {
+        ["iron_ore"] = 2, ["coal"] = 2, ["wood"] = 2,
+    };
     public const int InvasionInterval = 7;
     public const int VictoryDay = 30;
 

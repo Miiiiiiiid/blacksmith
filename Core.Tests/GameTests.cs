@@ -51,8 +51,9 @@ public class GameTests
     public void Gathering_adds_materials_and_trains_martial()
     {
         var game = NewGame();
+        var before = game.State.MaterialCount("iron_ore");
         game.Gather("iron_ore");
-        Assert.Equal(2, game.State.MaterialCount("iron_ore"));
+        Assert.Equal(before + 2, game.State.MaterialCount("iron_ore"));
         Assert.Equal(1, game.State.Stats[StatType.Martial]);
     }
 
@@ -72,9 +73,10 @@ public class GameTests
         game.Buy("iron_ore", 1);
         game.Buy("coal", 1);
         game.Buy("wood", 1);
+        var ironBefore = game.State.MaterialCount("iron_ore");
 
         Assert.True(game.Craft("dagger", 1.0).Ok);
-        Assert.Equal(0, game.State.MaterialCount("iron_ore"));
+        Assert.Equal(ironBefore - 1, game.State.MaterialCount("iron_ore"));
         Assert.Single(game.State.Inventory);
 
         game.EndDay(); // 구매 3번 + 제작 1번으로 행동을 다 썼다
@@ -83,6 +85,12 @@ public class GameTests
         Assert.True(game.Sell(0).Ok);
         Assert.Equal(goldBefore + price, game.State.Gold);
         Assert.Empty(game.State.Inventory);
+    }
+
+    [Fact]
+    public void New_game_starts_with_enough_for_a_dagger()
+    {
+        Assert.True(NewGame().CanCraft("dagger"));
     }
 
     [Fact]
@@ -127,13 +135,14 @@ public class GameTests
     public void Save_round_trip_keeps_state()
     {
         var game = NewGame(seed: 7);
+        var coal = game.State.MaterialCount("coal");
         game.Gather("coal");
         game.State.Stats.ChangeFame(-3);
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(game.State));
 
         Assert.Equal(7, loaded.Seed);
-        Assert.Equal(3, loaded.MaterialCount("coal"));
+        Assert.Equal(coal + 3, loaded.MaterialCount("coal"));
         Assert.Equal(1, loaded.Stats[StatType.Martial]);
         Assert.Equal(-3, loaded.Stats.Fame);
         Assert.Equal(GameRules.ActionsPerDay - 1, loaded.ActionsLeft);

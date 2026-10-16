@@ -140,21 +140,27 @@ public partial class Main : Control
             foreach (var m in _data.Materials.Values)
                 AddButton(buy, $"{m.Name} ({_game.BuyCost(m, 1)}G)", () => Do(() => _game.Buy(m.Id, 1)));
 
-            var craft = Row(_actions, "제작");
+            _actions.AddChild(new Label { Text = "제작" });
             foreach (var item in _data.Items.Values)
             {
                 var canCraft = _game.CanCraft(item.Id) && s.ActionsLeft > 0;
-                var button = AddButton(craft, item.Name, () => OpenForging(item));
-                button.Disabled = !canCraft;
-                button.TooltipText = string.Join(", ", item.Materials.Select(m => $"{_data.Materials[m.Key].Name} {m.Value}"));
+                var row = Row(_actions, $"  {item.Name}");
+                AddButton(row, "만들기", () => OpenForging(item)).Disabled = !canCraft;
                 if (_game.AutoCraftQuality(item.Id) is { } autoQuality)
+                    AddButton(row, $"자동 {autoQuality:P0}", () => Do(() => _game.CraftAuto(item.Id))).Disabled = !canCraft;
+                // 필요한 재료를 "가진 수/필요한 수"로 보여주고, 모자라면 빨갛게 표시한다.
+                var needs = new RichTextLabel { BbcodeEnabled = true, FitContent = true, AutowrapMode = TextServer.AutowrapMode.Off, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+                needs.Text = string.Join("  ", item.Materials.Select(m =>
                 {
-                    var auto = AddButton(craft, $"자동 {autoQuality:P0}", () => Do(() => _game.CraftAuto(item.Id)));
-                    auto.Disabled = !canCraft;
-                }
+                    var have = s.MaterialCount(m.Key);
+                    var text = $"{_data.Materials[m.Key].Name} {have}/{m.Value}";
+                    return have >= m.Value ? text : $"[color=#e07070]{text}[/color]";
+                }));
+                row.AddChild(needs);
             }
 
             AddButton(_actions, "하루 마치기", () => Do(_game.EndDay));
+            AddButton(_actions, "처음부터 다시", () => { StartNewGame(); Refresh(); });
         }
 
         Clear(_inventory);

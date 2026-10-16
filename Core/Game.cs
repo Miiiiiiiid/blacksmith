@@ -16,7 +16,13 @@ public sealed class Game
         State = state;
     }
 
-    public static Game NewGame(GameData data, int seed) => new(data, new GameState { Seed = seed });
+    public static Game NewGame(GameData data, int seed)
+    {
+        var state = new GameState { Seed = seed };
+        foreach (var (id, amount) in GameRules.StartingMaterials)
+            if (data.Materials.ContainsKey(id)) state.AddMaterial(id, amount);
+        return new Game(data, state);
+    }
 
     public ActionResult Gather(string materialId)
     {

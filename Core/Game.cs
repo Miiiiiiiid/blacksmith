@@ -37,7 +37,7 @@ public sealed class Game
             return Fail("채집할 수 없는 재료입니다.");
 
         State.AddMaterial(material.Id, material.GatherAmount);
-        return Spend(StatType.Martial, $"{material.Name} {material.GatherAmount}개를 채집했습니다.");
+        return Spend(GameRules.GatherTraining, $"{material.Name} {material.GatherAmount}개를 채집했습니다.");
     }
 
     public ActionResult Buy(string materialId, int quantity)
@@ -51,7 +51,7 @@ public sealed class Game
 
         State.Gold -= cost;
         State.AddMaterial(material.Id, quantity);
-        return Spend(StatType.Eloquence, $"{material.Name} {quantity}개를 {cost} 골드에 샀습니다.");
+        return Spend(GameRules.BuyTraining, $"{material.Name} {quantity}개를 {cost} 골드에 샀습니다.");
     }
 
     /// <summary>화술이 높을수록 싸게 산다. 최대 25% 할인.</summary>
@@ -100,7 +100,7 @@ public sealed class Game
         }
 
         var how = manual ? "만들었습니다" : "자동으로 만들었습니다";
-        return Spend(item.TrainsStat, $"{item.Name}을(를) {how}. 품질 {quality:P0}");
+        return Spend(item.Training, $"{item.Name}을(를) {how}. 품질 {quality:P0}");
     }
 
     public int SellPrice(CraftedItem crafted) =>
@@ -117,7 +117,7 @@ public sealed class Game
         var price = SellPrice(crafted);
         State.Inventory.RemoveAt(inventoryIndex);
         State.Gold += price;
-        return Spend(StatType.Eloquence, $"{Data.Items[crafted.ItemId].Name}을(를) {price} 골드에 팔았습니다.");
+        return Spend(GameRules.SellTraining, $"{Data.Items[crafted.ItemId].Name}을(를) {price} 골드에 팔았습니다.");
     }
 
     public double DefenseValue(CraftedItem crafted) =>
@@ -218,11 +218,10 @@ public sealed class Game
         return null;
     }
 
-    private ActionResult Spend(StatType? trained, string message)
+    private ActionResult Spend(StatGain? training, string message)
     {
         State.ActionsLeft--;
-        if (trained is { } stat)
-            State.Stats.Train(stat, GameRules.TrainPerAction, GameRules.DecayRatio);
+        if (training != null) State.Stats.Train(training);
         return Log(new ActionResult(true, message));
     }
 

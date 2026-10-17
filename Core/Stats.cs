@@ -25,6 +25,9 @@ public static class StatPairs
     };
 }
 
+/// <summary>행동 한 번이 능력치에 주는 변화. Stat이 Gain만큼 오르고, 반대쪽이 Loss만큼 내린다.</summary>
+public sealed record StatGain(StatType Stat, double Gain, double Loss);
+
 /// <summary>능력치와 명성. 한쪽을 키우면 같은 쌍의 반대쪽이 퇴보한다.</summary>
 public sealed class Stats
 {
@@ -36,11 +39,12 @@ public sealed class Stats
 
     public double this[StatType stat] => Values[stat];
 
-    public void Train(StatType stat, double amount, double decayRatio)
+    /// <summary>능력치를 올리고 같은 쌍의 반대쪽을 내린다.</summary>
+    public void Train(StatGain training)
     {
-        Values[stat] = Math.Min(GameRules.StatMax, Values[stat] + amount);
-        var opposite = StatPairs.Opposite(stat);
-        Values[opposite] = Math.Max(0, Values[opposite] - amount * decayRatio);
+        Values[training.Stat] = Math.Min(GameRules.StatMax, Values[training.Stat] + training.Gain);
+        var opposite = StatPairs.Opposite(training.Stat);
+        Values[opposite] = Math.Max(0, Values[opposite] - training.Loss);
     }
 
     public void ChangeFame(double amount) =>

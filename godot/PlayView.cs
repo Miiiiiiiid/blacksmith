@@ -105,11 +105,11 @@ public partial class PlayView : Control
             $"명성 {st.Fame:+0;-0;0}";
 
         Clear(_actions);
-        var gather = Row(_actions, "채집");
+        var gather = Row(_actions, $"채집  {Hint(GameRules.GatherTraining)}");
         foreach (var m in _data.Materials.Values.Where(m => m.GatherAmount > 0))
             AddButton(gather, $"{m.Name} +{m.GatherAmount}", () => Do(() => _game.Gather(m.Id)));
 
-        var buy = Row(_actions, "구매");
+        var buy = Row(_actions, $"구매  {Hint(GameRules.BuyTraining)}");
         foreach (var m in _data.Materials.Values)
             AddButton(buy, $"{m.Name} ({_game.BuyCost(m, 1)}G)", () => Do(() => _game.Buy(m.Id, 1)));
 
@@ -117,7 +117,7 @@ public partial class PlayView : Control
         foreach (var item in _data.Items.Values)
         {
             var canCraft = _game.CanCraft(item.Id) && s.ActionsLeft > 0;
-            var row = Row(_actions, $"  {item.Name}");
+            var row = Row(_actions, $"  {item.Name}  {Hint(item.Training)}");
             AddButton(row, "만들기", () => OpenForging(item)).Disabled = !canCraft;
             if (_game.AutoCraftQuality(item.Id) is { } autoQuality)
                 AddButton(row, $"자동 {autoQuality:P0}", () => Do(() => _game.CraftAuto(item.Id))).Disabled = !canCraft;
@@ -132,6 +132,19 @@ public partial class PlayView : Control
             row.AddChild(needs);
         }
 
+        _actions.AddChild(new Label { Text = $"판매  {Hint(GameRules.SellTraining)}" });
+        if (s.Inventory.Count == 0)
+            _actions.AddChild(new Label { Text = "  팔 물건이 없습니다.", Modulate = new Color(1, 1, 1, 0.6f) });
+        var sell = new HFlowContainer();
+        _actions.AddChild(sell);
+        for (var i = 0; i < s.Inventory.Count; i++)
+        {
+            var index = i;
+            var crafted = s.Inventory[i];
+            AddButton(sell, $"{_data.Items[crafted.ItemId].Name} {crafted.Quality:P0} → {_game.SellPrice(crafted)}G", () => Do(() => _game.Sell(index)))
+                .Disabled = s.ActionsLeft <= 0;
+        }
+
         var end = Row(_actions, "");
         AddButton(end, "하루 마치기", () => _onEndDay());
         AddButton(end, "타이틀로", () => _onTitle());
@@ -142,7 +155,6 @@ public partial class PlayView : Control
             var index = i;
             var crafted = s.Inventory[i];
             var row = Row(_inventory, $"{_data.Items[crafted.ItemId].Name} (품질 {crafted.Quality:P0})");
-            AddButton(row, $"판매 {_game.SellPrice(crafted)}G", () => Do(() => _game.Sell(index)));
             if (_game.Settings.Invasions && _game.DefenseValue(crafted) > 0)
                 AddButton(row, $"납품 +{_game.DefenseValue(crafted):0.#}", () => Do(() => _game.Deliver(index)));
         }
@@ -174,10 +186,14 @@ public partial class PlayView : Control
         };
     }
 
+    /// <summary>행동이 능력치를 어떻게 바꾸는지 짧게 적는다. 예: 힘+10 섬세함-7</summary>
+    private static string Hint(StatGain training) =>
+        $"{UiText.StatNames[training.Stat]}+{training.Gain:0.#} {UiText.StatNames[StatPairs.Opposite(training.Stat)]}-{training.Loss:0.#}";
+
     private static HBoxContainer Row(Container parent, string title)
     {
         var row = new HBoxContainer();
-        row.AddChild(new Label { Text = title, CustomMinimumSize = new Vector2(220, 0) });
+        row.AddChild(new Label { Text = title, CustomMinimumSize = new Vector2(300, 0) });
         parent.AddChild(row);
         return row;
     }

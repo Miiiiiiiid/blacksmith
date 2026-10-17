@@ -19,10 +19,10 @@ public class GameTests
         var stats = new Stats();
         stats.Values[StatType.Finesse] = 5;
 
-        stats.Train(StatType.Strength, 1, 0.6);
+        stats.Train(new StatGain(StatType.Strength, 10, 3));
 
-        Assert.Equal(1, stats[StatType.Strength]);
-        Assert.Equal(4.4, stats[StatType.Finesse], 6);
+        Assert.Equal(10, stats[StatType.Strength]);
+        Assert.Equal(2, stats[StatType.Finesse], 6);
         Assert.Equal(0, stats[StatType.Eloquence]);
     }
 
@@ -30,7 +30,7 @@ public class GameTests
     public void Decay_never_goes_below_zero()
     {
         var stats = new Stats();
-        stats.Train(StatType.Eloquence, 1, 0.6);
+        stats.Train(new StatGain(StatType.Eloquence, 10, 6));
         Assert.Equal(0, stats[StatType.Boldness]);
     }
 
@@ -48,13 +48,13 @@ public class GameTests
     }
 
     [Fact]
-    public void Gathering_adds_materials_and_trains_martial()
+    public void Gathering_adds_materials_and_trains_strength()
     {
         var game = NewGame();
         var before = game.State.MaterialCount("iron_ore");
         game.Gather("iron_ore");
         Assert.Equal(before + 2, game.State.MaterialCount("iron_ore"));
-        Assert.Equal(1, game.State.Stats[StatType.Martial]);
+        Assert.Equal(10, game.State.Stats[StatType.Strength]);
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public class GameTests
 
         Assert.Equal(7, loaded.Seed);
         Assert.Equal(coal + 3, loaded.MaterialCount("coal"));
-        Assert.Equal(1, loaded.Stats[StatType.Martial]);
+        Assert.Equal(10, loaded.Stats[StatType.Strength]);
         Assert.Equal(-3, loaded.Stats.Fame);
         Assert.Equal(GameRules.ActionsPerDay - 1, loaded.ActionsLeft);
     }
@@ -184,8 +184,8 @@ public class FlowTests
         var report = game.State.LastReport!;
         Assert.Equal(1, report.Day);
         Assert.Equal(1, report.Crafted);
-        Assert.Equal(1, report.StatChanges[StatType.Martial], 6);
-        Assert.Equal(1, report.StatChanges[StatType.Strength], 6);
+        Assert.Equal(10, report.StatChanges[StatType.Strength], 6);
+        Assert.Equal(10, report.StatChanges[StatType.Martial], 6);
         Assert.Null(report.Invasion);
     }
 
@@ -227,5 +227,37 @@ public class FlowTests
         game.Craft("dagger", 0.5);
         game.Craft("dagger", 0.5);
         Assert.Single(game.State.Chronicle, e => e.Text.Contains("단검"));
+    }
+
+    [Theory]
+    [InlineData("dagger", StatType.Martial, StatType.Scholarship)]
+    [InlineData("longsword", StatType.Martial, StatType.Scholarship)]
+    [InlineData("sickle", StatType.Scholarship, StatType.Martial)]
+    public void Crafting_trains_the_items_stat_and_lowers_its_opposite(string itemId, StatType up, StatType down)
+    {
+        var game = NewGame();
+        game.State.Stats.Values[down] = 20;
+        game.State.AddMaterial("iron_ore", 5);
+        game.State.AddMaterial("coal", 5);
+        game.State.AddMaterial("wood", 5);
+        game.State.AddMaterial("leather", 5);
+        game.Craft(itemId, 0.5);
+        Assert.Equal(10, game.State.Stats[up], 6);
+        Assert.Equal(15, game.State.Stats[down], 6);
+    }
+
+    [Fact]
+    public void Buying_and_selling_train_eloquence_and_lower_boldness()
+    {
+        var game = NewGame();
+        game.State.Stats.Values[StatType.Boldness] = 20;
+        game.Buy("coal", 1);
+        Assert.Equal(10, game.State.Stats[StatType.Eloquence], 6);
+        Assert.Equal(14, game.State.Stats[StatType.Boldness], 6);
+
+        game.Craft("dagger", 0.5);
+        game.Sell(0);
+        Assert.Equal(15, game.State.Stats[StatType.Eloquence], 6);
+        Assert.Equal(11, game.State.Stats[StatType.Boldness], 6);
     }
 }

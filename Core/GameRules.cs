@@ -4,10 +4,13 @@ namespace Blacksmith.Core;
 public static class GameRules
 {
     public const int ActionsPerDay = 4;
-    public const double DecayRatio = 0.6;
-    public const double TrainPerAction = 1.0;
     public const double StatMax = 100;
     public const double FameMax = 100;
+
+    /// <summary>행동별 능력치 변화. 제작은 품목마다 items.json에 있다.</summary>
+    public static readonly StatGain GatherTraining = new(StatType.Strength, 10, 7);
+    public static readonly StatGain BuyTraining = new(StatType.Eloquence, 10, 6);
+    public static readonly StatGain SellTraining = new(StatType.Eloquence, 5, 3);
 
     public const int StartingGold = 50;
     /// <summary>시작 재료. 첫날 바로 단검 하나는 만들어볼 수 있게 한다.</summary>

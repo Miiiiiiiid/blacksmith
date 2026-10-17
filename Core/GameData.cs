@@ -20,8 +20,8 @@ public sealed class ItemDef
     public int BasePrice { get; set; }
     /// <summary>왕국군에 납품했을 때의 방어력.</summary>
     public double DefensePower { get; set; }
-    /// <summary>제작할 때 키우는 능력치.</summary>
-    public StatType TrainsStat { get; set; }
+    /// <summary>제작할 때 능력치 변화.</summary>
+    public StatGain Training { get; set; } = new(StatType.Strength, 0, 0);
 }
 
 /// <summary>재료와 품목 정의. JSON 데이터 파일에서 읽는다.</summary>

@@ -2,16 +2,16 @@
   {
     "id": "dagger", "name": "단검",
     "materials": { "iron_ore": 1, "coal": 1, "wood": 1 },
-    "basePrice": 20, "defensePower": 3, "trainsStat": "Strength"
+    "basePrice": 20, "defensePower": 3, "training": { "stat": "Martial", "gain": 10, "loss": 5 }
   },
   {
     "id": "longsword", "name": "장검",
     "materials": { "iron_ore": 3, "coal": 2, "leather": 1 },
-    "basePrice": 60, "defensePower": 10, "trainsStat": "Strength"
+    "basePrice": 60, "defensePower": 10, "training": { "stat": "Martial", "gain": 10, "loss": 5 }
   },
   {
     "id": "sickle", "name": "낫",
     "materials": { "iron_ore": 1, "wood": 1 },
-    "basePrice": 18, "defensePower": 0, "trainsStat": "Finesse"
+    "basePrice": 18, "defensePower": 0, "training": { "stat": "Scholarship", "gain": 10, "loss": 5 }
   }
 ]

@@ -95,8 +95,8 @@ public static class ForgingMinigame
 
     // 각인
     public const int MemoryCount = 5;
-    /// <summary>방향키를 보여주는 시간(초). 학문이 높을수록 길다. 5초에서 7초까지.</summary>
-    public static double MemoryShowSeconds(double scholarship) => 5 + 2 * Ratio(scholarship);
+    /// <summary>방향키를 보여주는 시간(초). 학문이 높을수록 길다. 3초에서 5초까지.</summary>
+    public static double MemoryShowSeconds(double scholarship) => 3 + 2 * Ratio(scholarship);
     public const double MemoryInputSeconds = 6.0;
     public static IReadOnlyList<Arrow> RandomArrows(Random random, int count) =>
         Enumerable.Range(0, count).Select(_ => (Arrow)random.Next(4)).ToArray();

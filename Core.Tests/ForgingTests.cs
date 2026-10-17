@@ -54,7 +54,8 @@ public class ForgingTests
         Assert.Equal(18, ForgingMinigame.WhetstoneTarget(0));
         Assert.Equal(12, ForgingMinigame.WhetstoneTarget(100));
         Assert.True(ForgingMinigame.ReleaseHalfWidth(100) > ForgingMinigame.ReleaseHalfWidth(0));
-        Assert.Equal(3, ForgingMinigame.MemoryShowSeconds(100), 6);
+        Assert.Equal(5, ForgingMinigame.MemoryShowSeconds(0), 6);
+        Assert.Equal(7, ForgingMinigame.MemoryShowSeconds(100), 6);
         Assert.Equal(1, ForgingMinigame.ScoreFurnace(ForgingMinigame.FurnaceSeconds * 0.7), 6);
         Assert.Equal(0.6, ForgingMinigame.ScoreMemory(3), 6);
         Assert.True(ForgingMinigame.InFurnaceZone(ForgingMinigame.FurnaceTarget));

@@ -34,8 +34,12 @@ public partial class ForgingPanel : Control
         [Arrow.Up] = "ui_up", [Arrow.Down] = "ui_down", [Arrow.Left] = "ui_left", [Arrow.Right] = "ui_right",
     };
 
-    /// <summary>판이 바뀐 직후 잠깐 입력을 막는다. 연타하던 스페이스가 다음 판이나 완료로 새지 않게.</summary>
+    /// <summary>결과창이 뜬 직후 잠깐 입력을 막는다. 연타하던 손이 결과창을 바로 닫지 않게.</summary>
     private const double InputGrace = 0.4;
+    /// <summary>판마다 시작 전에 3, 2, 1을 세는 한 칸의 시간(초).</summary>
+    private const double CountStep = 0.6;
+    /// <summary>판이 끝나고 "종료!"를 띄우는 시간(초).</summary>
+    private const double EndPause = 1.0;
 
     private string _itemName = "";
     private Stats _stats = new();
@@ -48,6 +52,16 @@ public partial class ForgingPanel : Control
     private double _roundAge;
     private double _elapsed;
     private bool _started;
+    /// <summary>시작까지 남은 카운트 시간. 0보다 크면 입력을 받지 않는다.</summary>
+    private double _countdown;
+    /// <summary>"종료!"를 띄우고 있는 남은 시간과, 그동안 들고 있는 이번 판 점수.</summary>
+    private double _ending;
+    private double _pendingScore;
+    /// <summary>카운트나 "종료!" 중이면 입력을 받지 않는다.</summary>
+    private bool Counting => _countdown > 0 || _ending > 0;
+    /// <summary>화면 버튼을 누르고 있는지. 누르고 있기 게임을 터치로도 하려고 따로 기억한다.</summary>
+    private bool _buttonHeld;
+    private bool Held => _buttonHeld || Input.IsActionPressed("ui_accept");
     private bool _finished;
     private double _quality;
 
@@ -66,6 +80,7 @@ public partial class ForgingPanel : Control
     private Label _instruction = null!;
     private Label _scoreLabel = null!;
     private Label _note = null!;
+    private Label _count = null!;
     private GaugeBar _bar = null!;
     private RichTextLabel _arrowView = null!;
     private HBoxContainer _arrowButtons = null!;
@@ -94,6 +109,8 @@ public partial class ForgingPanel : Control
         _bar = new GaugeBar { CustomMinimumSize = new Vector2(0, 48) };
         _note = new Label { HorizontalAlignment = HorizontalAlignment.Center };
         _note.AddThemeColorOverride("font_color", new Color(0.95f, 0.5f, 0.4f));
+        _count = new Label { HorizontalAlignment = HorizontalAlignment.Center };
+        _count.AddThemeFontSizeOverride("font_size", 40);
         _arrowView = new RichTextLabel { BbcodeEnabled = true, FitContent = true, ScrollActive = false, CustomMinimumSize = new Vector2(0, 64) };
         _arrowView.AddThemeFontSizeOverride("normal_font_size", 44);
 
@@ -110,13 +127,13 @@ public partial class ForgingPanel : Control
         _scoreLabel = new Label();
         _actionButton = new Button { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 56) };
         // 누르고 있는 게임도 마우스로 할 수 있게 누름과 뗌을 따로 받는다.
-        _actionButton.ButtonDown += () => OnPress();
-        _actionButton.ButtonUp += () => OnRelease();
-        // 결과를 보고 다시 하는 걸 막으려고, 그만두기는 첫 동작 전에만 할 수 있다.
+        _actionButton.ButtonDown += () => { _buttonHeld = true; OnPress(); };
+        _actionButton.ButtonUp += () => { _buttonHeld = false; OnRelease(); };
+        // 결과를 보고 다시 하는 걸 막으려고, 그만두기는 첫 판의 카운트 동안에만 할 수 있다.
         _cancelButton = new Button { Text = "그만두기", FocusMode = FocusModeEnum.None };
         _cancelButton.Pressed += () => { _onCancel(); QueueFree(); };
 
-        foreach (var node in new Control[] { title, _instruction, _bar, _note, _arrowView, _arrowButtons, _sideButtons, _scoreLabel, _actionButton, _cancelButton })
+        foreach (var node in new Control[] { title, _instruction, _bar, _count, _note, _arrowView, _arrowButtons, _sideButtons, _scoreLabel, _actionButton, _cancelButton })
             box.AddChild(node);
 
         _rounds = ForgingMinigame.PickRounds(new Random((int)GD.Randi()));
@@ -149,6 +166,19 @@ public partial class ForgingPanel : Control
     public override void _Process(double delta)
     {
         _roundAge += delta;
+        if (!_finished && _ending > 0)
+        {
+            _ending -= delta;
+            if (_ending <= 0) NextRound();
+            return;
+        }
+        if (!_finished && _countdown > 0)
+        {
+            _countdown -= delta;
+            _count.Text = Counting ? $"{Math.Ceiling(_countdown / CountStep)}" : "";
+            if (!Counting) BeginRound();
+            return;
+        }
         if (_finished || !_started) return;
         _elapsed += delta;
 
@@ -172,7 +202,7 @@ public partial class ForgingPanel : Control
 
             case Minigame.Furnace:
                 // 누르면 달궈지고 떼면 식는다. 섬세함이 낮으면 저절로 출렁인다.
-                _velocity += (_holding ? 1.6 : -1.2) * delta;
+                _velocity += (Held ? 1.6 : -1.2) * delta;
                 _velocity += (GD.Randf() - 0.5) * ForgingMinigame.FurnaceWobble(Finesse) * 8 * delta;
                 _velocity *= Math.Exp(-1.5 * delta);
                 _value += _velocity * delta;
@@ -181,7 +211,8 @@ public partial class ForgingPanel : Control
                 _bar.Marker = (float)_value;
                 _bar.Fill = (float)ForgingMinigame.ScoreFurnace(_inZone);
                 _bar.TimeLeft = TimeLeft(ForgingMinigame.FurnaceSeconds);
-                if (_elapsed >= ForgingMinigame.FurnaceSeconds) EndRound(ForgingMinigame.ScoreFurnace(_inZone));
+                // 만점을 채우면 시간을 기다리지 않고 넘어간다.
+                if (ForgingMinigame.ScoreFurnace(_inZone) >= 1 || _elapsed >= ForgingMinigame.FurnaceSeconds) EndRound(ForgingMinigame.ScoreFurnace(_inZone));
                 break;
 
             case Minigame.Whetstone:
@@ -192,7 +223,13 @@ public partial class ForgingPanel : Control
                 break;
 
             case Minigame.Release:
-                if (!_holding) break;
+                if (!_holding)
+                {
+                    // 누르는 순간부터 게이지가 찬다. 카운트 동안 누르고 있었으면 바로 찬다.
+                    if (!Held) break;
+                    _holding = true;
+                    _elapsed = 0;
+                }
                 _value = _elapsed / ForgingMinigame.ReleaseFillSeconds;
                 _bar.Marker = (float)Math.Min(_value, 1);
                 // 끝까지 차도록 붙잡고 있으면 실패다.
@@ -217,6 +254,18 @@ public partial class ForgingPanel : Control
         _bar.QueueRedraw();
     }
 
+    /// <summary>카운트가 끝나서 판을 시작한다.</summary>
+    private void BeginRound()
+    {
+        _started = true;
+        _count.Visible = false;
+        _cancelButton.Visible = false;
+        _arrowView.Visible = Current is Minigame.Arrows or Minigame.Memory;
+        _arrowButtons.Visible = Current is Minigame.Arrows or Minigame.Memory;
+        _sideButtons.Visible = Current == Minigame.Whetstone;
+        _actionButton.Visible = Current is Minigame.Hammer or Minigame.Bellows or Minigame.Furnace or Minigame.Release;
+    }
+
     private float TimeLeft(double limit) => (float)Math.Max(0, 1 - _elapsed / limit);
 
     private string RoundTag() => $"{_scores.Count + 1}/{_rounds.Count}판";
@@ -236,13 +285,18 @@ public partial class ForgingPanel : Control
         _memoryHidden = false;
         _arrowHits.Clear();
         _note.Text = "";
+        // 입력을 기다리지 않고 3, 2, 1을 센 뒤 시작한다. 그동안 조작 버튼은 숨긴다.
+        _countdown = CountStep * 3;
+        _buttonHeld = false;
+        _count.Text = "3";
+        _count.Visible = true;
 
         var game = Current;
         _bar.Reset();
-        _arrowView.Visible = game is Minigame.Arrows or Minigame.Memory;
-        _arrowButtons.Visible = game is Minigame.Arrows or Minigame.Memory;
-        _sideButtons.Visible = game == Minigame.Whetstone;
-        _actionButton.Visible = game is Minigame.Hammer or Minigame.Bellows or Minigame.Furnace or Minigame.Release;
+        _arrowView.Visible = false;
+        _arrowButtons.Visible = false;
+        _sideButtons.Visible = false;
+        _actionButton.Visible = false;
         _note.Visible = game == Minigame.Whetstone;
 
         var tag = RoundTag();
@@ -252,18 +306,16 @@ public partial class ForgingPanel : Control
                 _bar.SetZone(ForgingMinigame.HammerTarget, ForgingMinigame.ZoneHalfWidth(Strength));
                 // 시작 위치를 섞어서 박자를 외우지 못하게 한다.
                 _elapsed = GD.Randf() * ForgingMinigame.HammerPeriod;
-                _started = true;
                 _instruction.Text = $"{tag} 망치질: 흰 선이 초록 구간에 올 때 {UiText.ConfirmKey}로 내리치세요";
                 _actionButton.Text = "내리치기";
                 break;
             case Minigame.Bellows:
                 _bar.ShowFill = true;
-                _instruction.Text = $"{tag} 풀무질: 누르면 시작해요. {ForgingMinigame.BellowsSeconds:0}초 동안 {UiText.ConfirmKey}를 빠르게 연타하세요 (만점 {ForgingMinigame.BellowsTarget(Strength)}번)";
+                _instruction.Text = $"{tag} 풀무질: {ForgingMinigame.BellowsSeconds:0}초 동안 {UiText.ConfirmKey}를 빠르게 연타하세요 (만점 {ForgingMinigame.BellowsTarget(Strength)}번)";
                 _actionButton.Text = "풀무질";
                 break;
             case Minigame.Arrows:
                 _bar.ShowFill = true;
-                _started = true;
                 _arrows = ForgingMinigame.RandomArrows(new Random((int)GD.Randi()));
                 _instruction.Text = $"{tag} 세공: {UiText.ArrowKeys}로 순서대로 누르세요 ({ForgingMinigame.ArrowSeconds(Finesse):0.#}초)";
                 DrawArrows();
@@ -287,7 +339,6 @@ public partial class ForgingPanel : Control
                 break;
             case Minigame.Memory:
                 _bar.ShowFill = true;
-                _started = true;
                 _arrows = ForgingMinigame.RandomArrows(new Random((int)GD.Randi()), ForgingMinigame.MemoryCount);
                 _instruction.Text = $"{tag} 각인: 방향키 {ForgingMinigame.MemoryCount}개를 외우세요 ({ForgingMinigame.MemoryShowSeconds(Scholarship):0.#}초 뒤에 사라져요)";
                 DrawArrows();
@@ -296,9 +347,25 @@ public partial class ForgingPanel : Control
         UpdateScores();
     }
 
+    /// <summary>게이지를 다 채웠거나 시간이 다 됐다. "종료!"를 잠깐 띄운 뒤 다음 판으로 간다.</summary>
     private void EndRound(double score)
     {
-        _scores.Add(score);
+        if (_ending > 0) return;
+        _pendingScore = score;
+        _ending = EndPause;
+        _holding = false;
+        if (Current is Minigame.Bellows or Minigame.Whetstone) _bar.Fill = (float)score;
+        _count.Text = "종료!";
+        _count.Visible = true;
+        _arrowButtons.Visible = false;
+        _sideButtons.Visible = false;
+        _actionButton.Visible = false;
+        _bar.QueueRedraw();
+    }
+
+    private void NextRound()
+    {
+        _scores.Add(_pendingScore);
         if (_scores.Count < _rounds.Count)
         {
             StartRound();
@@ -308,6 +375,7 @@ public partial class ForgingPanel : Control
         _quality = ForgingMinigame.Combine(_scores);
         _finished = true;
         _roundAge = 0;
+        _count.Visible = false;
         _instruction.Text = $"완성! 품질 {_quality:P0}";
         _actionButton.Text = "완료";
         _actionButton.Visible = true;
@@ -319,32 +387,19 @@ public partial class ForgingPanel : Control
 
     private void OnPress()
     {
-        if (_roundAge < InputGrace) return;
-        if (_finished) return; // 완료는 뗄 때 처리해서, 누르고 있던 손이 결과창을 바로 닫지 않게 한다.
+        // 완료는 뗄 때 처리해서, 누르고 있던 손이 결과창을 바로 닫지 않게 한다.
+        if (_finished || Counting || !_started) return;
 
         switch (Current)
         {
             case Minigame.Hammer:
-                _cancelButton.Visible = false;
                 EndRound(ForgingMinigame.ScoreTiming(_bar.Marker, ForgingMinigame.HammerTarget, ForgingMinigame.ZoneHalfWidth(Strength)));
                 break;
             case Minigame.Bellows:
-                _cancelButton.Visible = false;
-                _started = true;
                 _presses++;
                 UpdateScores();
-                break;
-            case Minigame.Furnace:
-                _cancelButton.Visible = false;
-                _started = true;
-                _holding = true;
-                break;
-            case Minigame.Release:
-                if (_holding) break;
-                _cancelButton.Visible = false;
-                _started = true;
-                _holding = true;
-                _elapsed = 0;
+                // 만점을 채우면 시간을 기다리지 않고 넘어간다.
+                if (ForgingMinigame.ScoreBellows(_presses, Strength) >= 1) EndRound(1);
                 break;
         }
     }
@@ -358,17 +413,14 @@ public partial class ForgingPanel : Control
             QueueFree();
             return;
         }
-        if (!_holding) return;
+        if (Counting || Current != Minigame.Release || !_holding) return;
         _holding = false;
-        if (Current == Minigame.Release)
-            EndRound(ForgingMinigame.ScoreTiming(_value, ForgingMinigame.ReleaseTarget, ForgingMinigame.ReleaseHalfWidth(Martial)));
+        EndRound(ForgingMinigame.ScoreTiming(_value, ForgingMinigame.ReleaseTarget, ForgingMinigame.ReleaseHalfWidth(Martial)));
     }
 
     private void OnSide(int side)
     {
-        if (side == 0 || _roundAge < InputGrace || _finished || Current != Minigame.Whetstone) return;
-        _cancelButton.Visible = false;
-        _started = true;
+        if (side == 0 || Counting || !_started || _finished || Current != Minigame.Whetstone) return;
         if (_elapsed < _stunnedUntil) return;
         if (side == _lastSide)
         {
@@ -378,15 +430,15 @@ public partial class ForgingPanel : Control
         _lastSide = side;
         _presses++;
         UpdateScores();
+        if (ForgingMinigame.ScoreWhetstone(_presses, Boldness) >= 1) EndRound(1);
     }
 
     private void OnArrow(Arrow arrow)
     {
-        if (_roundAge < InputGrace || _finished) return;
+        if (Counting || !_started || _finished) return;
         if (Current is not (Minigame.Arrows or Minigame.Memory) || _arrowHits.Count >= _arrows.Count) return;
         // 각인은 방향키가 사라진 뒤에만 입력을 받는다.
         if (Current == Minigame.Memory && !_memoryHidden) return;
-        _cancelButton.Visible = false;
         _arrowHits.Add(_arrows[_arrowHits.Count] == arrow);
         _bar.Fill = (float)_arrowHits.Count / _arrows.Count;
         DrawArrows();

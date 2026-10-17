@@ -40,6 +40,9 @@ public partial class PlayView : Control
         if (!result.Ok) _log.AppendText($"[color=#d66]{result.Message}[/color]\n");
         _save();
         Refresh();
+        // 행동을 다 쓰면 하루를 저절로 마친다. 하루 마치기 버튼은 일찍 끝낼 때 쓴다.
+        if (result.Ok && _game.State.ActionsLeft <= 0 && _game.State.Status == GameStatus.Playing)
+            _onEndDay();
     }
 
     private void BuildLayout()

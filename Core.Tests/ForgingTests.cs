@@ -30,11 +30,39 @@ public class ForgingTests
     }
 
     [Fact]
-    public void Perfect_stages_make_perfect_quality()
+    public void Quality_is_the_average_of_the_rounds()
     {
-        var hammers = Enumerable.Repeat(1.0, ForgingMinigame.HammerStrikes).ToList();
-        Assert.Equal(1, ForgingMinigame.Combine(1, hammers, 1), 6);
-        Assert.Equal(0, ForgingMinigame.Combine(0, new List<double>(), 0), 6);
+        Assert.Equal(1, ForgingMinigame.Combine(new[] { 1.0, 1.0, 1.0 }), 6);
+        Assert.Equal(0.5, ForgingMinigame.Combine(new[] { 1.0, 0.5, 0.0 }), 6);
+        Assert.Equal(0, ForgingMinigame.Combine(Array.Empty<double>()), 6);
+    }
+
+    [Fact]
+    public void Each_craft_picks_three_rounds_and_can_repeat()
+    {
+        var random = new Random(3);
+        var picks = Enumerable.Range(0, 200).Select(_ => ForgingMinigame.PickRounds(random)).ToList();
+        Assert.All(picks, p => Assert.Equal(ForgingMinigame.RoundsPerCraft, p.Count));
+        Assert.Contains(picks, p => p.Distinct().Count() == 1);
+        Assert.All(Enum.GetValues<Minigame>(), m => Assert.Contains(picks, p => p.Contains(m)));
+    }
+
+    [Fact]
+    public void Strength_lowers_the_bellows_target()
+    {
+        Assert.Equal(20, ForgingMinigame.BellowsTarget(0));
+        Assert.Equal(14, ForgingMinigame.BellowsTarget(100));
+        Assert.Equal(1, ForgingMinigame.ScoreBellows(14, 100));
+        Assert.Equal(0.5, ForgingMinigame.ScoreBellows(10, 0), 6);
+    }
+
+    [Fact]
+    public void Finesse_gives_more_time_for_arrows()
+    {
+        Assert.Equal(4, ForgingMinigame.ArrowSeconds(0));
+        Assert.Equal(6, ForgingMinigame.ArrowSeconds(100));
+        Assert.Equal(ForgingMinigame.ArrowCount, ForgingMinigame.RandomArrows(new Random(1)).Count);
+        Assert.Equal(0.5, ForgingMinigame.ScoreArrows(3), 6);
     }
 }
 

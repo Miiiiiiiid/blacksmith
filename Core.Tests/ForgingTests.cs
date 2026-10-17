@@ -48,6 +48,20 @@ public class ForgingTests
     }
 
     [Fact]
+    public void Stats_ease_the_new_minigames()
+    {
+        Assert.True(ForgingMinigame.FurnaceWobble(100) < ForgingMinigame.FurnaceWobble(0));
+        Assert.Equal(18, ForgingMinigame.WhetstoneTarget(0));
+        Assert.Equal(12, ForgingMinigame.WhetstoneTarget(100));
+        Assert.True(ForgingMinigame.ReleaseHalfWidth(100) > ForgingMinigame.ReleaseHalfWidth(0));
+        Assert.Equal(3, ForgingMinigame.MemoryShowSeconds(100), 6);
+        Assert.Equal(1, ForgingMinigame.ScoreFurnace(ForgingMinigame.FurnaceSeconds * 0.7), 6);
+        Assert.Equal(0.6, ForgingMinigame.ScoreMemory(3), 6);
+        Assert.True(ForgingMinigame.InFurnaceZone(ForgingMinigame.FurnaceTarget));
+        Assert.False(ForgingMinigame.InFurnaceZone(0));
+    }
+
+    [Fact]
     public void Strength_lowers_the_bellows_target()
     {
         Assert.Equal(20, ForgingMinigame.BellowsTarget(0));

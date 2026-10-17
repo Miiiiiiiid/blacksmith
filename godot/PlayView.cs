@@ -172,8 +172,7 @@ public partial class PlayView : Control
         GetViewport().GuiReleaseFocus();
         AddChild(ForgingPanel.Create(
             item,
-            _game.State.Stats[StatType.Strength],
-            _game.State.Stats[StatType.Finesse],
+            _game.State.Stats,
             quality => Do(() => _game.Craft(item.Id, quality)),
             () => { }));
     }

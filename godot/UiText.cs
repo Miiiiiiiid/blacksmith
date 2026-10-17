@@ -17,6 +17,46 @@ public static class UiText
         [StatType.Scholarship] = "학문",
     };
 
+    public enum Device { KeyboardMouse, Touch, Gamepad }
+
+    /// <summary>마지막으로 쓴 입력 장치. 안내 문구를 장치에 맞춰 바꾸는 데 쓴다.</summary>
+    public static Device LastDevice { get; private set; } = OS.HasFeature("mobile") ? Device.Touch : Device.KeyboardMouse;
+
+    public static void NoteInput(InputEvent e)
+    {
+        LastDevice = e switch
+        {
+            InputEventJoypadButton or InputEventJoypadMotion { AxisValue: > 0.5f or < -0.5f } => Device.Gamepad,
+            InputEventScreenTouch or InputEventScreenDrag => Device.Touch,
+            InputEventKey or InputEventMouseButton => Device.KeyboardMouse,
+            _ => LastDevice,
+        };
+    }
+
+    /// <summary>확인(누르기·연타·누르고 있기) 입력의 이름.</summary>
+    public static string ConfirmKey => LastDevice switch
+    {
+        Device.Gamepad => "A 버튼",
+        Device.Touch => "아래 버튼",
+        _ => "스페이스",
+    };
+
+    /// <summary>좌우 번갈아 누르기 입력의 이름.</summary>
+    public static string SideKeys => LastDevice switch
+    {
+        Device.Gamepad => "LB·RB(또는 십자키 ←→)",
+        Device.Touch => "좌우 버튼",
+        _ => "A·D(또는 ←→)",
+    };
+
+    /// <summary>방향 입력의 이름.</summary>
+    public static string ArrowKeys => LastDevice switch
+    {
+        Device.Gamepad => "십자키",
+        Device.Touch => "화살표 버튼",
+        _ => "방향키",
+    };
+
     public static string Signed(double value) => value.ToString("+0.#;-0.#;0");
 
     public static Label Title(string text, int size = 28)

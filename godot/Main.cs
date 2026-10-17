@@ -25,6 +25,8 @@ public partial class Main : Control
         ShowTitle();
     }
 
+    public override void _Input(InputEvent e) => UiText.NoteInput(e);
+
     private Game? LoadSave()
     {
         if (!Godot.FileAccess.FileExists(SavePath)) return null;

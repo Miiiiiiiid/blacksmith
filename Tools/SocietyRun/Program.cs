@@ -31,13 +31,14 @@ var report = new StringBuilder();
 report.AppendLine($"시드 {seeds}개, 최대 {maxGenerations}세대");
 report.AppendLine();
 report.AppendLine("주인공 보정별 결과 (수비력과 공격대에 같은 배율을 곱함. 1배 = 주인공 없음)");
-report.AppendLine("배율   토벌 비율  토벌까지 세대(중간)  완전 몰락(평균)");
-foreach (var bonus in new[] { 1.0, 1.5, 2, 3, 5 })
+report.AppendLine("배율   토벌 비율  토벌까지 세대(중간/최대)  완전 몰락(평균)  한 번도 안 무너짐");
+foreach (var bonus in new[] { 0.5, 1.0, 1.5, 2, 3 })
 {
     var sims = RunAll(bonus);
     var won = sims.Where(r => r.State.Won).ToList();
-    var gens = won.Count == 0 ? "-" : $"{Median(won.Select(r => (double)r.State.History.Count)):0}";
-    report.AppendLine($"{bonus,4}배  {100.0 * won.Count / seeds,7:0}%  {gens,18}  {sims.Average(r => r.State.Collapses),14:0.0}");
+    var gens = won.Count == 0 ? "-" : $"{Median(won.Select(r => (double)r.State.History.Count)):0}/{won.Max(r => r.State.History.Count)}";
+    var clean = 100.0 * sims.Count(r => r.State.Collapses == 0) / seeds;
+    report.AppendLine($"{bonus,4}배  {100.0 * won.Count / seeds,7:0}%  {gens,22}  {sims.Average(r => r.State.Collapses),14:0.0}  {clean,14:0}%");
 }
 
 var runs = RunAll(1);

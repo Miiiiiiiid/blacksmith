@@ -1,18 +1,22 @@
 namespace Blacksmith.Core.Society;
 
 /// <summary>
-/// 주인공 없이 사회만 굴러가는 시뮬레이션. 한 턴은 상순·중순·하순 중 하나이고, 900턴이 끝나면 마왕군이 쳐들어온다.
+/// 주인공 없이 사회만 굴러가는 시뮬레이션. 한 턴은 상순·중순·하순 중 하나이고, 900턴이 끝나면 잠든 마왕이 깨어나 내려온다.
 /// 같은 시드면 같은 역사가 나온다.
 /// </summary>
 public sealed class SocietySimulation
 {
-    private static readonly SocietyStat[] RemnantStats = { SocietyStat.Food, SocietyStat.Combat };
-    private static readonly SocietyStat[] TownStats = { SocietyStat.Tech, SocietyStat.Economy };
+    private static readonly SocietyStat[] RemnantStats = { SocietyStat.Food, SocietyStat.Combat, SocietyStat.Strike };
+    private static readonly SocietyStat[] TownStats = { SocietyStat.Tech, SocietyStat.Economy, SocietyStat.Walls };
     private static readonly SocietyStat[] CityStats = { SocietyStat.Stability, SocietyStat.Culture };
 
     private readonly Random _random;
 
     public SocietyState State { get; }
+
+    /// <summary>주인공 대신 넣는 보정. 대장장이의 무기가 군대와 공격대를 얼마나 세게 만드는지 가늠할 때 쓴다.</summary>
+    public double DefenseBonus { get; init; } = 1;
+    public double StrikeBonus { get; init; } = 1;
 
     public SocietySimulation(int seed)
     {
@@ -39,7 +43,9 @@ public sealed class SocietySimulation
     {
         SocietyStat.Food => stage switch { Stage.Remnant => "농사꾼", Stage.Nation => "농업장관", _ => "식량 담당" },
         SocietyStat.Combat => stage switch { Stage.Remnant => "힘센 사람", Stage.Nation => "군대장", _ => "방위대장" },
+        SocietyStat.Strike => stage switch { Stage.Nation => "용병단장", Stage.City => "용사 파티", _ => "용사" },
         SocietyStat.Tech => stage switch { Stage.Nation => "기술장관", Stage.City => "기술 담당", _ => "장인" },
+        SocietyStat.Walls => stage switch { Stage.Nation => "축성장관", Stage.City => "축성 담당", _ => "석공" },
         SocietyStat.Economy => stage switch { Stage.Nation => "재무장관", Stage.City => "재무 담당", _ => "행상" },
         SocietyStat.Stability => stage == Stage.Nation ? "군주" : "지도자",
         SocietyStat.Culture => stage == Stage.Nation ? "문화장관" : "이야기꾼",
@@ -50,8 +56,10 @@ public sealed class SocietySimulation
     {
         SocietyStat.Food => "식량",
         SocietyStat.Combat => stage == Stage.Nation ? "군사력" : "전투력",
+        SocietyStat.Strike => stage switch { Stage.Nation => "용병단", Stage.City => "용사 파티", _ => "용사" },
         SocietyStat.Tech => "기술",
         SocietyStat.Economy => "경제",
+        SocietyStat.Walls => "방벽",
         SocietyStat.Stability => "정치안정도",
         SocietyStat.Culture => "문화",
         _ => stat.ToString(),
@@ -65,12 +73,22 @@ public sealed class SocietySimulation
     public double FoodSecurity =>
         Math.Clamp(State.FoodStock / (State.Population * SocietyRules.FoodPerPerson * SocietyRules.FoodReserveTurns), 0, 1.5);
 
-    /// <summary>침공을 막는 힘. 2천 명이 넘으면 군대가 생겨 1.5배가 된다.</summary>
+    /// <summary>군대의 힘. 2천 명이 넘으면 군대가 생겨 1.5배가 된다.</summary>
     public double Military =>
         Stat(SocietyStat.Combat)
         * (1 + Stat(SocietyStat.Tech) / 100)
         * (1 + Stat(SocietyStat.Economy) / 400)
         * (CurrentStage == Stage.Nation ? 1.5 : 1);
+
+    /// <summary>수비력. 군대와 방벽이 마왕의 체력과 1:1로 맞바뀐다.</summary>
+    public double Defense => (Military + Stat(SocietyStat.Walls) * (1 + Stat(SocietyStat.Tech) / 100)) * DefenseBonus;
+
+    /// <summary>물러나는 마왕을 쫓는 공격대의 힘. 용병단은 경제가 받쳐준다.</summary>
+    public double StrikePower =>
+        Stat(SocietyStat.Strike)
+        * (1 + Stat(SocietyStat.Tech) / 100)
+        * (CurrentStage == Stage.Nation ? 1 + Stat(SocietyStat.Economy) / 400 : 1)
+        * StrikeBonus;
 
     /// <summary>승리하거나 세대 상한에 닿을 때까지 돌린다.</summary>
     public void Run(int maxGenerations)
@@ -119,6 +137,9 @@ public sealed class SocietySimulation
             SocietyStat.Combat => Math.Pow(pop / 100, 0.7),
             SocietyStat.Tech => Math.Sqrt(pop / 500),
             SocietyStat.Economy => Math.Pow(pop / 500, 0.7),
+            SocietyStat.Walls => Math.Pow(pop / 100, 0.7) * 0.5,
+            // 용사 한 명 → 용사 파티 → 용병단으로 커진다.
+            SocietyStat.Strike => new[] { 1, 1.5, 2.5, 4 }[(int)CurrentStage],
             SocietyStat.Culture => Math.Sqrt(pop / 1000),
             _ => 1,
         };
@@ -142,7 +163,7 @@ public sealed class SocietySimulation
 
     /// <summary>땅이 먹여 살릴 수 있는 인구.</summary>
     public double Capacity =>
-        SocietyRules.BaseCapacity * (1 + Stat(SocietyStat.Tech) / 40) * (1 + Stat(SocietyStat.Food) / 100);
+        SocietyRules.BaseCapacity * (1 + Stat(SocietyStat.Tech) / 100) * (1 + Stat(SocietyStat.Food) / 100);
 
     private void Grow()
     {
@@ -206,68 +227,72 @@ public sealed class SocietySimulation
 
     private void Invade()
     {
-        var enemy = State.Enemy;
-        var military = Military * (0.85 + 0.3 * _random.NextDouble());
+        var boss = State.Boss;
+        var defense = Defense * Swing();
+        var strike = 0.0;
         var before = State.Population;
         var snapshot = new Dictionary<SocietyStat, double>(State.Stats);
         var stage = CurrentStage;
         InvasionOutcome outcome;
 
-        if (military >= enemy)
+        if (defense >= boss)
         {
-            var survivors = military - enemy * 0.5;
-            var reserve = enemy * SocietyRules.FinalBattleReserve * (0.8 + 0.4 * _random.NextDouble());
-            if (_random.NextDouble() < survivors / (survivors + reserve))
+            // 군대와 방벽은 마왕에게 준 피해만큼 깎인다.
+            var spent = boss / defense;
+            State.Stats[SocietyStat.Combat] = Stat(SocietyStat.Combat) * (1 - spent);
+            State.Stats[SocietyStat.Walls] = Stat(SocietyStat.Walls) * (1 - spent);
+
+            // 공격대는 원래 체력의 마왕을 쫓는다.
+            strike = StrikePower * Swing();
+            if (strike >= boss)
             {
                 outcome = InvasionOutcome.Victory;
                 State.Won = true;
-                Log($"마왕군 {enemy:0}을(를) 막고 쫓아가 최후의 결전에서 이겼다. 마왕이 쓰러졌다.");
+                Log($"깨어난 마왕(체력 {boss:0})을 수비력 {defense:0}으로 막고, 공격대가 물러나는 마왕을 쫓아가 쓰러뜨렸다.");
             }
             else
             {
-                outcome = InvasionOutcome.DefendedButLost;
-                State.Population *= 0.9;
-                State.Stats[SocietyStat.Combat] = Stat(SocietyStat.Combat) * 0.7;
-                Log($"마왕군 {enemy:0}을(를) 막아냈지만 최후의 결전에서 졌다. 마왕은 물러나 힘을 기른다.");
+                outcome = InvasionOutcome.Repelled;
+                State.Boss -= strike;
+                Log($"깨어난 마왕(체력 {boss:0})을 막아냈다. 공격대가 {strike:0}의 상처를 입혔지만 놓쳤다. 마왕은 다시 잠들었다.");
             }
         }
         else
         {
-            var remaining = enemy - military;
-            var ratio = remaining / enemy;
-            var lost = Math.Min(State.Population, remaining * SocietyRules.PopulationLossPerEnemyPower);
-            State.Population -= lost;
-            State.Wanderers += lost * SocietyRules.ScatteredRatio;
+            var remaining = boss - defense;
+            var ratio = remaining / boss;
+            var eaten = Math.Min(State.Population, remaining * SocietyRules.PopulationLossPerBossHealth);
+            State.Population -= eaten;
+            State.Boss += eaten;
+            State.Wanderers += eaten * SocietyRules.ScatteredRatio;
             if (State.Population < SocietyRules.CollapsePopulation)
             {
                 outcome = InvasionOutcome.Destroyed;
                 State.Collapses++;
-                Log($"마왕군 {enemy:0}에 군사력 {military:0}으로 맞섰다가 완전히 무너졌다. 살아남은 이들이 피난을 떠났다.");
+                Log($"깨어난 마왕(체력 {boss:0})에 수비력 {defense:0}으로 맞섰다가 완전히 무너졌다. 살아남은 이들이 피난을 떠났다.");
                 StartAsRemnant();
             }
             else
             {
-                outcome = InvasionOutcome.Damaged;
+                outcome = InvasionOutcome.Breached;
+                State.Stats[SocietyStat.Combat] = 0;
+                State.Stats[SocietyStat.Walls] = 0;
                 foreach (var stat in State.Stats.Keys.ToList()) State.Stats[stat] *= 1 - ratio;
                 State.FoodStock *= 1 - ratio;
                 foreach (var stat in State.Leaders.Keys.ToList())
                     if (_random.NextDouble() < ratio) State.Leaders.Remove(stat);
                 State.Hardship = Math.Max(State.Hardship, 0.5);
-                Log($"마왕군 {enemy:0}을(를) 막지 못했다. 인구 {before:0}명 중 {before - State.Population:0}명을 잃었지만 터전은 지켰다.");
+                Log($"깨어난 마왕(체력 {boss:0})을 막지 못했다. 인구 {before:0}명 중 {eaten:0}명을 잃었지만 터전은 지켰다.");
             }
         }
 
-        State.Enemy *= outcome switch
-        {
-            InvasionOutcome.DefendedButLost => SocietyRules.EnemyAfterRepelled,
-            InvasionOutcome.Damaged => SocietyRules.EnemyAfterDamaged,
-            InvasionOutcome.Destroyed => SocietyRules.EnemyAfterDestroyed,
-            _ => 1,
-        };
         State.History.Add(new GenerationSummary(
-            State.Generation, (int)before, stage, military, enemy, outcome, (int)State.Population, snapshot));
+            State.Generation, (int)before, stage, defense, strike, boss, outcome, (int)State.Population, State.Boss, snapshot));
         State.Generation++;
     }
+
+    /// <summary>싸움마다 ±15%의 운.</summary>
+    private double Swing() => 0.85 + 0.3 * _random.NextDouble();
 
     private void StartAsRemnant()
     {

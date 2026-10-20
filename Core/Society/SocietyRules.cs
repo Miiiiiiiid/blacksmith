@@ -55,13 +55,8 @@ public static class SocietyRules
     public const double YearlyAbilityGrowth = 1.0;
     public const int RetireAge = 60;
 
-    // 마왕군.
-    public const double BaseEnemyStrength = 3000;
-    // 다음 세대 마왕군의 힘. 막히면 이를 갈고 강해지고, 나라를 무너뜨리면 점령지를 다스리느라 흩어져 약해진다.
-    public const double EnemyAfterRepelled = 1.35;
-    public const double EnemyAfterDamaged = 1.15;
-    public const double EnemyAfterDestroyed = 0.8;
-    /// <summary>방어에 실패했을 때 적의 남은 힘 1당 잃는 인구.</summary>
-    public const double PopulationLossPerEnemyPower = 1;
-    public const double FinalBattleReserve = 0.6;
+    // 마왕. 25년마다 깨어나 먹이를 찾아 내려오는 단일 개체.
+    public const double BossHealth = 3500;
+    /// <summary>뚫렸을 때 마왕의 남은 체력 1당 잃는 인구. 마왕은 먹은 만큼 체력이 는다.</summary>
+    public const double PopulationLossPerBossHealth = 3500;
 }

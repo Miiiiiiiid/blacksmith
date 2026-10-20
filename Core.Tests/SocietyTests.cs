@@ -56,7 +56,7 @@ public class SocietyTests
     public void Total_destruction_restarts_as_remnants()
     {
         var sim = new SocietySimulation(5);
-        sim.State.Enemy = 1e9;
+        sim.State.Boss = 1e9;
         sim.RunGeneration();
         Assert.Equal(InvasionOutcome.Destroyed, sim.State.History.Single().Outcome);
         Assert.Equal(30, sim.State.Population);
@@ -67,7 +67,7 @@ public class SocietyTests
     private sealed class HistoryComparer : IEqualityComparer<GenerationSummary>
     {
         public bool Equals(GenerationSummary? x, GenerationSummary? y) =>
-            x!.Generation == y!.Generation && x.Population == y.Population && x.Outcome == y.Outcome && x.Military == y.Military;
+            x!.Generation == y!.Generation && x.Population == y.Population && x.Outcome == y.Outcome && x.Defense == y.Defense;
 
         public int GetHashCode(GenerationSummary obj) => obj.Generation;
     }

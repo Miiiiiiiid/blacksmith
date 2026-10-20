@@ -16,12 +16,12 @@ public class SocietyTests
     }
 
     [Fact]
-    public void Starts_as_thirty_remnants_with_food_and_combat_only()
+    public void Starts_as_thirty_remnants_with_food_combat_and_a_hero()
     {
         var sim = new SocietySimulation(1);
         Assert.Equal(30, sim.State.Population);
         sim.Step();
-        Assert.Equal(new[] { SocietyStat.Food, SocietyStat.Combat }, sim.State.Leaders.Keys.OrderBy(k => k));
+        Assert.Equal(new[] { SocietyStat.Food, SocietyStat.Combat, SocietyStat.Strike }, sim.State.Leaders.Keys.OrderBy(k => k));
         Assert.Equal("농사꾼", SocietySimulation.Title(SocietyStat.Food, sim.CurrentStage));
     }
 
@@ -62,6 +62,35 @@ public class SocietyTests
         Assert.Equal(30, sim.State.Population);
         Assert.Equal(1, sim.State.Collapses);
         Assert.Empty(sim.State.Stats);
+    }
+
+    [Fact]
+    public void A_repelled_boss_comes_back_weaker_by_the_strike_damage()
+    {
+        var sim = new SocietySimulation(4) { DefenseBonus = 1000, StrikeBonus = 0.0001 };
+        sim.RunGeneration();
+        var h = sim.State.History.Single();
+        Assert.Equal(InvasionOutcome.Repelled, h.Outcome);
+        Assert.Equal(h.Boss - h.Strike, h.BossAfter, 6);
+    }
+
+    [Fact]
+    public void A_strike_that_reaches_full_health_kills_the_boss()
+    {
+        var sim = new SocietySimulation(4) { DefenseBonus = 1000, StrikeBonus = 1000 };
+        sim.RunGeneration();
+        Assert.Equal(InvasionOutcome.Victory, sim.State.History.Single().Outcome);
+        Assert.True(sim.State.Won);
+    }
+
+    [Fact]
+    public void A_breach_feeds_the_boss_by_the_people_it_ate()
+    {
+        var sim = new SocietySimulation(5);
+        sim.State.Boss = 1e9;
+        sim.RunGeneration();
+        var h = sim.State.History.Single();
+        Assert.Equal(h.Boss + h.Population, h.BossAfter, 0);
     }
 
     private sealed class HistoryComparer : IEqualityComparer<GenerationSummary>

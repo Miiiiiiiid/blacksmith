@@ -23,10 +23,16 @@ public sealed class SocietySimulation
     /// </summary>
     public double FirstStrikePower { get; init; }
 
-    public SocietySimulation(int seed)
+    /// <summary>주인공 대신 행동을 고르는 봇. 없으면 주인공 없이 사회만 굴러간다.</summary>
+    public IPlayStrategy? Strategy { get; }
+    public Difficulty Difficulty { get; }
+
+    public SocietySimulation(int seed, Difficulty difficulty = Difficulty.Normal, IPlayStrategy? strategy = null)
     {
         _random = new Random(seed);
-        State = new SocietyState { Seed = seed };
+        Difficulty = difficulty;
+        Strategy = strategy;
+        State = new SocietyState { Seed = seed, Boss = SocietyRules.BossHealth * BossHealthRatio(difficulty) };
         StartAsRemnant();
         Log("잔존세력 30명이 폐허에서 다시 모였다.");
     }
@@ -70,7 +76,20 @@ public sealed class SocietySimulation
         _ => stat.ToString(),
     };
 
+    public static double BossHealthRatio(Difficulty difficulty) =>
+        difficulty == Difficulty.Hard ? SocietyRules.HardBossHealthRatio : 1;
+
     public Stage CurrentStage => StageOf(State.Population);
+
+    /// <summary>마왕 연구로 밝힌 약점만큼 마왕에게 주는 피해가 늘어난다.</summary>
+    public double ResearchMultiplier
+    {
+        get
+        {
+            var r = State.Player.Research;
+            return 1 + ContributionRules.ResearchMaxBonus * r / (r + ContributionRules.ResearchHalf);
+        }
+    }
 
     public double Stat(SocietyStat stat) => State.Stats.GetValueOrDefault(stat);
 
@@ -126,6 +145,7 @@ public sealed class SocietySimulation
             if (!State.Leaders.ContainsKey(stat)) Appoint(stat, stage);
             Accumulate(stat, State.Leaders[stat].Ability);
         }
+        if (Strategy != null) Act(Strategy.Choose(this), stage);
 
         Feed();
         Grow();
@@ -157,6 +177,43 @@ public sealed class SocietySimulation
         var value = Stat(stat);
         value += ability * SocietyRules.StatGainRate * Scale(stat) - value * SocietyRules.StatDecay;
         State.Stats[stat] = value;
+    }
+
+    /// <summary>주인공의 행동 하나를 기여 환산표대로 사회에 반영한다.</summary>
+    private void Act(PlayerAction action, Stage stage)
+    {
+        var player = State.Player;
+        var stat = action.Stat;
+        if (!UnlockedStats(stage).Contains(stat)) stat = SocietyStat.Combat;
+        var quality = Quality();
+        switch (action.Kind)
+        {
+            case ActionKind.Request:
+                State.Stats[stat] = Stat(stat) + ContributionRules.RequestYield * Scale(stat) * quality;
+                break;
+            case ActionKind.Gear:
+                State.Leaders[stat].Ability += ContributionRules.GearAbility * quality;
+                break;
+            case ActionKind.Serve:
+                State.Stats[stat] = Stat(stat) + ContributionRules.ServeYield * Scale(stat) * quality;
+                break;
+            case ActionKind.Masterwork:
+                player.MasterworkPower += ContributionRules.MasterworkGain * quality
+                                          / (1 + player.MasterworkPower / ContributionRules.MasterworkSoftCap);
+                break;
+            case ActionKind.Research:
+                player.Research += ContributionRules.ResearchGain * quality;
+                break;
+        }
+        player.Skill += ContributionRules.SkillPerAction;
+        player.ActionCounts[action.Kind] = player.ActionCounts.GetValueOrDefault(action.Kind) + 1;
+    }
+
+    /// <summary>미니게임 점수(봇은 평균 0.7 근처의 난수)와 솜씨로 정해지는 품질.</summary>
+    private double Quality()
+    {
+        var score = Math.Clamp(0.7 + 0.15 * Gaussian(), 0, 1);
+        return (0.5 + score) * Math.Sqrt(State.Player.Skill / ContributionRules.StartingSkill);
     }
 
     private void Feed()
@@ -238,16 +295,20 @@ public sealed class SocietySimulation
         var boss = State.Boss;
         var fight = boss;
         var struckFirst = false;
-        var defense = Defense * Swing();
+        var research = ResearchMultiplier;
+        var player = State.Player;
+        var defense = Defense * research * Swing();
         var strike = 0.0;
         var before = State.Population;
         var snapshot = new Dictionary<SocietyStat, double>(State.Stats);
         var stage = CurrentStage;
         InvasionOutcome outcome;
 
-        if (FirstStrikePower > 0)
+        // 역작은 선제 일격에 쓰거나, 아니면 용사가 들고 공격대에 보탠다.
+        var useMasterwork = player.MasterworkPower > 0 && Strategy != null && Strategy.UseFirstStrike(this);
+        if (FirstStrikePower > 0 || useMasterwork)
         {
-            var hit = FirstStrikePower * Swing();
+            var hit = (FirstStrikePower + (useMasterwork ? player.MasterworkPower : 0)) * research * Swing();
             if (hit >= boss)
             {
                 State.Won = true;
@@ -277,7 +338,7 @@ public sealed class SocietySimulation
                 Log($"격노한 마왕을 막아냈지만, 선제 일격으로 힘을 쓴 탓에 공격대는 쫓아가지 못했다. 마왕은 다시 잠들었다.");
             }
             // 공격대는 원래 체력의 마왕을 쫓는다.
-            else if ((strike = StrikePower * Swing()) >= boss)
+            else if ((strike = (StrikePower + player.MasterworkPower) * research * Swing()) >= boss)
             {
                 outcome = InvasionOutcome.Victory;
                 State.Won = true;
@@ -295,14 +356,27 @@ public sealed class SocietySimulation
             // 뚫리면 멸망. 마왕은 군대 전부와 인구 일부를 먹고 강해진다.
             var army = Military * DefenseBonus;
             var eaten = State.Population * SocietyRules.BossAbsorbsPopulation;
-            State.Boss += army + eaten;
+            State.Boss += (army + eaten) * (Difficulty == Difficulty.Hard ? SocietyRules.HardBossAbsorbRatio : 1);
             State.Wanderers += State.Population * SocietyRules.ScatteredRatio;
             outcome = InvasionOutcome.Destroyed;
             State.Collapses++;
             LeaveLegacy(before);
+            // 주인공은 죽는다. 살아남은 이들이 연구의 일부를 기억하고, 운이 좋으면 폐허에서 역작을 되찾는다.
+            var relic = player.MasterworkPower > 0 && _random.NextDouble() < ContributionRules.RelicRecoverChance;
+            var next = new Smith
+            {
+                Research = player.Research * ContributionRules.ResearchKeptOnCollapse,
+                MasterworkPower = relic ? player.MasterworkPower : 0,
+            };
+            foreach (var (kind, count) in player.ActionCounts) next.ActionCounts[kind] = count;
+            State.Player = next;
             Log($"깨어난 마왕(체력 {boss:0})에 수비력 {defense:0}으로 맞섰다가 뚫려 멸망했다. 마왕은 군대와 {eaten:0}명을 삼키고 체력이 {State.Boss:0}이 되었다. 살아남은 이들이 피난을 떠났다.");
             StartAsRemnant();
         }
+
+        // 막아냈다면 제자나 자식이 대장간을 잇는다. 솜씨는 일부만 물려받는다.
+        if (outcome == InvasionOutcome.Repelled)
+            player.Skill = Math.Max(ContributionRules.StartingSkill, player.Skill * ContributionRules.SkillKeptOnSuccession);
 
         State.History.Add(new GenerationSummary(
             State.Generation, (int)before, stage, defense, strike, boss, outcome, (int)State.Population, State.Boss, snapshot));

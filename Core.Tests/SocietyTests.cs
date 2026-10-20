@@ -117,6 +117,68 @@ public class SocietyTests
         Assert.Equal(SocietyRules.BossHealth, sim.State.Boss);
     }
 
+    [Fact]
+    public void A_request_raises_its_field_right_away()
+    {
+        var alone = new SocietySimulation(8);
+        var helped = new SocietySimulation(8, strategy: new Always(new PlayerAction(ActionKind.Request, SocietyStat.Combat)));
+        alone.Step();
+        helped.Step();
+        Assert.True(helped.Stat(SocietyStat.Combat) > alone.Stat(SocietyStat.Combat));
+        Assert.Equal(1, helped.State.Player.ActionCounts[ActionKind.Request]);
+    }
+
+    [Fact]
+    public void Custom_gear_makes_the_representative_better()
+    {
+        var alone = new SocietySimulation(8);
+        var helped = new SocietySimulation(8, strategy: new Always(new PlayerAction(ActionKind.Gear, SocietyStat.Strike)));
+        alone.Step();
+        helped.Step();
+        Assert.True(helped.State.Leaders[SocietyStat.Strike].Ability > alone.State.Leaders[SocietyStat.Strike].Ability);
+    }
+
+    [Fact]
+    public void Research_makes_every_blow_hit_harder()
+    {
+        var sim = new SocietySimulation(8, strategy: new Always(new PlayerAction(ActionKind.Research)));
+        Assert.Equal(1, sim.ResearchMultiplier);
+        for (var i = 0; i < 100; i++) sim.Step();
+        Assert.True(sim.ResearchMultiplier > 1);
+    }
+
+    [Fact]
+    public void A_strong_enough_masterwork_is_used_as_the_first_strike()
+    {
+        var sim = new SocietySimulation(8, strategy: new Bots.MasterworkBot());
+        sim.State.Player.MasterworkPower = 1e9;
+        sim.RunGeneration();
+        Assert.True(sim.State.Won);
+        Assert.Contains(sim.State.Chronicle, e => e.Text.Contains("한 방에"));
+    }
+
+    [Fact]
+    public void The_smith_dies_with_the_society()
+    {
+        var sim = new SocietySimulation(5, strategy: new Bots.RequestBot());
+        sim.State.Boss = 1e9;
+        sim.RunGeneration();
+        Assert.Equal(ContributionRules.StartingSkill, sim.State.Player.Skill);
+    }
+
+    [Fact]
+    public void Hard_starts_with_a_tougher_boss()
+    {
+        Assert.Equal(SocietyRules.BossHealth, new SocietySimulation(1).State.Boss);
+        Assert.Equal(SocietyRules.BossHealth * SocietyRules.HardBossHealthRatio, new SocietySimulation(1, Difficulty.Hard).State.Boss);
+    }
+
+    private sealed class Always(PlayerAction action) : IPlayStrategy
+    {
+        public string Name => "고정";
+        public PlayerAction Choose(SocietySimulation sim) => action;
+    }
+
     private sealed class HistoryComparer : IEqualityComparer<GenerationSummary>
     {
         public bool Equals(GenerationSummary? x, GenerationSummary? y) =>

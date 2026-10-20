@@ -49,6 +49,7 @@ public sealed class SocietyState
     public Dictionary<SocietyStat, Person> Leaders { get; set; } = new();
     /// <summary>멸망한 사회가 남긴 유산. 수치별로 다음 대표자의 능력을 올려주는 배율(0이면 없음).</summary>
     public Dictionary<SocietyStat, double> Legacy { get; set; } = new();
+    public Smith Player { get; set; } = new();
     public int Collapses { get; set; }
     /// <summary>최근 몰락의 여파. 몰락하면 차오르고 세월이 지나며 빠진다. 난세에 인물이 난다.</summary>
     public double Hardship { get; set; }

@@ -84,13 +84,15 @@ public class SocietyTests
     }
 
     [Fact]
-    public void A_breach_feeds_the_boss_by_the_people_it_ate()
+    public void A_breach_is_the_end_and_feeds_the_boss()
     {
         var sim = new SocietySimulation(5);
-        sim.State.Boss = 1e9;
+        sim.State.Boss = 1e6;
         sim.RunGeneration();
         var h = sim.State.History.Single();
-        Assert.Equal(h.Boss + h.Population, h.BossAfter, 0);
+        Assert.Equal(InvasionOutcome.Destroyed, h.Outcome);
+        Assert.True(h.BossAfter > h.Boss + h.Population * SocietyRules.BossAbsorbsPopulation);
+        Assert.NotEmpty(sim.State.Legacy);
     }
 
     private sealed class HistoryComparer : IEqualityComparer<GenerationSummary>

@@ -129,9 +129,10 @@ public sealed class SocietySimulation
         State.Hardship *= 1 - 1.0 / (SocietyRules.TurnsPerYear * 10);
     }
 
-    private double Scale(SocietyStat stat)
+    private double Scale(SocietyStat stat) => Scale(stat, State.Population);
+
+    private static double Scale(SocietyStat stat, double pop)
     {
-        var pop = State.Population;
         return stat switch
         {
             SocietyStat.Combat => Math.Pow(pop / 100, 0.7),
@@ -139,7 +140,7 @@ public sealed class SocietySimulation
             SocietyStat.Economy => Math.Pow(pop / 500, 0.7),
             SocietyStat.Walls => Math.Pow(pop / 100, 0.7) * 0.5,
             // 용사 한 명 → 용사 파티 → 용병단으로 커진다.
-            SocietyStat.Strike => new[] { 1, 1.5, 2.5, 4 }[(int)CurrentStage],
+            SocietyStat.Strike => new[] { 1, 1.5, 2.5, 4 }[(int)StageOf(pop)],
             SocietyStat.Culture => Math.Sqrt(pop / 1000),
             _ => 1,
         };
@@ -206,12 +207,14 @@ public sealed class SocietySimulation
     }
 
     /// <summary>
-    /// 대표자는 무작위로 나오지만, 문화와 안정이 높거나 막 몰락을 겪은 난세일수록 뛰어난 사람이 나올 확률이 높다.
+    /// 대표자는 무작위로 나오지만, 문화와 안정이 높거나, 막 몰락을 겪은 난세이거나,
+    /// 멸망한 앞 사회에서 그 수치가 높았을수록 뛰어난 사람이 나올 확률이 높다.
     /// </summary>
     private void Appoint(SocietyStat stat, Stage stage)
     {
         var luck = Math.Exp(Gaussian() * SocietyRules.AbilitySpread);
-        var climate = 1 + Stat(SocietyStat.Culture) / 200 + Stat(SocietyStat.Stability) / 400 + State.Hardship * 0.5;
+        var climate = 1 + Stat(SocietyStat.Culture) / 200 + Stat(SocietyStat.Stability) / 400 + State.Hardship * 0.5
+                      + State.Legacy.GetValueOrDefault(stat);
         var person = new Person
         {
             Name = Names.Next(_random),
@@ -259,31 +262,16 @@ public sealed class SocietySimulation
         }
         else
         {
-            var remaining = boss - defense;
-            var ratio = remaining / boss;
-            var eaten = Math.Min(State.Population, remaining * SocietyRules.PopulationLossPerBossHealth);
-            State.Population -= eaten;
-            State.Boss += eaten;
-            State.Wanderers += eaten * SocietyRules.ScatteredRatio;
-            if (State.Population < SocietyRules.CollapsePopulation)
-            {
-                outcome = InvasionOutcome.Destroyed;
-                State.Collapses++;
-                Log($"깨어난 마왕(체력 {boss:0})에 수비력 {defense:0}으로 맞섰다가 완전히 무너졌다. 살아남은 이들이 피난을 떠났다.");
-                StartAsRemnant();
-            }
-            else
-            {
-                outcome = InvasionOutcome.Breached;
-                State.Stats[SocietyStat.Combat] = 0;
-                State.Stats[SocietyStat.Walls] = 0;
-                foreach (var stat in State.Stats.Keys.ToList()) State.Stats[stat] *= 1 - ratio;
-                State.FoodStock *= 1 - ratio;
-                foreach (var stat in State.Leaders.Keys.ToList())
-                    if (_random.NextDouble() < ratio) State.Leaders.Remove(stat);
-                State.Hardship = Math.Max(State.Hardship, 0.5);
-                Log($"깨어난 마왕(체력 {boss:0})을 막지 못했다. 인구 {before:0}명 중 {eaten:0}명을 잃었지만 터전은 지켰다.");
-            }
+            // 뚫리면 멸망. 마왕은 군대 전부와 인구 일부를 먹고 강해진다.
+            var army = Military * DefenseBonus;
+            var eaten = State.Population * SocietyRules.BossAbsorbsPopulation;
+            State.Boss += army + eaten;
+            State.Wanderers += State.Population * SocietyRules.ScatteredRatio;
+            outcome = InvasionOutcome.Destroyed;
+            State.Collapses++;
+            LeaveLegacy(before);
+            Log($"깨어난 마왕(체력 {boss:0})에 수비력 {defense:0}으로 맞섰다가 뚫려 멸망했다. 마왕은 군대와 {eaten:0}명을 삼키고 체력이 {State.Boss:0}이 되었다. 살아남은 이들이 피난을 떠났다.");
+            StartAsRemnant();
         }
 
         State.History.Add(new GenerationSummary(
@@ -293,6 +281,17 @@ public sealed class SocietySimulation
 
     /// <summary>싸움마다 ±15%의 운.</summary>
     private double Swing() => 0.85 + 0.3 * _random.NextDouble();
+
+    /// <summary>멸망한 사회의 수치를 같은 규모의 평범한 사회와 비교해 유산으로 남긴다.</summary>
+    private void LeaveLegacy(double population)
+    {
+        foreach (var (stat, value) in State.Stats)
+        {
+            var ordinary = 2 * SocietyRules.MeanAbility * Scale(stat, SocietyRules.LegacyReferencePopulation);
+            var legacy = SocietyRules.LegacyWeight * value / ordinary;
+            State.Legacy[stat] = Math.Max(State.Legacy.GetValueOrDefault(stat) * SocietyRules.LegacyCarry, legacy);
+        }
+    }
 
     private void StartAsRemnant()
     {

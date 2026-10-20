@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlacksmithCore.Tests", "Cor
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blacksmith", "godot\Blacksmith.csproj", "{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{12906B5E-2E3D-42AE-8079-72AD7BE407BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SocietyRun", "Tools\SocietyRun\SocietyRun.csproj", "{7DC25768-49D5-4E3F-97A9-96596043119D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +34,12 @@ Global
 		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Release|Any CPU.ActiveCfg = Debug|Any CPU
 		{8B1DD7BD-09EF-48F6-9416-5CC6EE9129EF}.Release|Any CPU.Build.0 = Debug|Any CPU
+		{7DC25768-49D5-4E3F-97A9-96596043119D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7DC25768-49D5-4E3F-97A9-96596043119D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7DC25768-49D5-4E3F-97A9-96596043119D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7DC25768-49D5-4E3F-97A9-96596043119D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7DC25768-49D5-4E3F-97A9-96596043119D} = {12906B5E-2E3D-42AE-8079-72AD7BE407BF}
 	EndGlobalSection
 EndGlobal

@@ -237,6 +237,7 @@ public sealed class SocietySimulation
     {
         var boss = State.Boss;
         var fight = boss;
+        var struckFirst = false;
         var defense = Defense * Swing();
         var strike = 0.0;
         var before = State.Population;
@@ -256,7 +257,9 @@ public sealed class SocietySimulation
                 State.Generation++;
                 return;
             }
+            // 격노는 이번 공세에만 적용된다.
             fight = (boss - hit) * (1 + SocietyRules.EnrageRatio);
+            struckFirst = true;
             Log($"선제 일격으로 마왕에게 {hit:0}의 피해를 줬지만 쓰러뜨리지 못했다. 마왕이 격노했다. (이번 싸움 체력 {fight:0})");
         }
 
@@ -267,9 +270,14 @@ public sealed class SocietySimulation
             State.Stats[SocietyStat.Combat] = Stat(SocietyStat.Combat) * (1 - spent);
             State.Stats[SocietyStat.Walls] = Stat(SocietyStat.Walls) * (1 - spent);
 
+            if (struckFirst)
+            {
+                // 선제 일격을 쓴 공세에서는 막아내도 공격대가 쫓아가지 못한다.
+                outcome = InvasionOutcome.Repelled;
+                Log($"격노한 마왕을 막아냈지만, 선제 일격으로 힘을 쓴 탓에 공격대는 쫓아가지 못했다. 마왕은 다시 잠들었다.");
+            }
             // 공격대는 원래 체력의 마왕을 쫓는다.
-            strike = StrikePower * Swing();
-            if (strike >= boss)
+            else if ((strike = StrikePower * Swing()) >= boss)
             {
                 outcome = InvasionOutcome.Victory;
                 State.Won = true;

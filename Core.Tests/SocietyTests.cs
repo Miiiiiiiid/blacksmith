@@ -107,9 +107,14 @@ public class SocietyTests
     [Fact]
     public void A_first_strike_that_fails_enrages_the_boss()
     {
-        var sim = new SocietySimulation(6) { FirstStrikePower = 1 };
+        var sim = new SocietySimulation(6) { FirstStrikePower = 1, DefenseBonus = 1e6, StrikeBonus = 1e6 };
         sim.RunGeneration();
         Assert.Contains(sim.State.Chronicle, e => e.Text.Contains("격노"));
+        // 막아내도 공격대는 쫓아가지 못하고, 격노는 그 공세로 끝난다.
+        var h = sim.State.History.Single();
+        Assert.Equal(InvasionOutcome.Repelled, h.Outcome);
+        Assert.Equal(0, h.Strike);
+        Assert.Equal(SocietyRules.BossHealth, sim.State.Boss);
     }
 
     private sealed class HistoryComparer : IEqualityComparer<GenerationSummary>

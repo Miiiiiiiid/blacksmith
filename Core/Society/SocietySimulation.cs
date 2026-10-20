@@ -17,6 +17,11 @@ public sealed class SocietySimulation
     /// <summary>주인공 대신 넣는 보정. 대장장이의 무기가 군대와 공격대를 얼마나 세게 만드는지 가늠할 때 쓴다.</summary>
     public double DefenseBonus { get; init; } = 1;
     public double StrikeBonus { get; init; } = 1;
+    /// <summary>
+    /// 선제 일격의 힘. 조건을 갖춘 용사(혹은 주인공)가 내려온 마왕을 수비 전에 딱 한 대 때린다.
+    /// 0이면 없음. 한 방에 못 죽이면 마왕이 격노한다.
+    /// </summary>
+    public double FirstStrikePower { get; init; }
 
     public SocietySimulation(int seed)
     {
@@ -231,6 +236,7 @@ public sealed class SocietySimulation
     private void Invade()
     {
         var boss = State.Boss;
+        var fight = boss;
         var defense = Defense * Swing();
         var strike = 0.0;
         var before = State.Population;
@@ -238,10 +244,26 @@ public sealed class SocietySimulation
         var stage = CurrentStage;
         InvasionOutcome outcome;
 
-        if (defense >= boss)
+        if (FirstStrikePower > 0)
+        {
+            var hit = FirstStrikePower * Swing();
+            if (hit >= boss)
+            {
+                State.Won = true;
+                Log($"깨어난 마왕(체력 {boss:0})을 선제 일격 {hit:0} 한 방에 쓰러뜨렸다.");
+                State.History.Add(new GenerationSummary(
+                    State.Generation, (int)before, stage, defense, hit, boss, InvasionOutcome.Victory, (int)State.Population, 0, snapshot));
+                State.Generation++;
+                return;
+            }
+            fight = (boss - hit) * (1 + SocietyRules.EnrageRatio);
+            Log($"선제 일격으로 마왕에게 {hit:0}의 피해를 줬지만 쓰러뜨리지 못했다. 마왕이 격노했다. (이번 싸움 체력 {fight:0})");
+        }
+
+        if (defense >= fight)
         {
             // 군대와 방벽은 마왕에게 준 피해만큼 깎인다.
-            var spent = boss / defense;
+            var spent = fight / defense;
             State.Stats[SocietyStat.Combat] = Stat(SocietyStat.Combat) * (1 - spent);
             State.Stats[SocietyStat.Walls] = Stat(SocietyStat.Walls) * (1 - spent);
 

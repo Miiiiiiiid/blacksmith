@@ -56,14 +56,16 @@ public static class SocietyRules
     public const int RetireAge = 60;
 
     // 마왕. 25년마다 깨어나 먹이를 찾아 내려오는 단일 개체.
-    public const double BossHealth = 1000;
+    public const double BossHealth = 2000;
     /// <summary>뚫리면 사회는 멸망하고, 마왕은 군대 전부와 인구의 이 비율만큼을 체력으로 흡수한다.</summary>
     public const double BossAbsorbsPopulation = 0.1;
+    /// <summary>선제 일격으로 죽이지 못하면 마왕이 격노해 이번 싸움의 체력이 이만큼 늘어난다.</summary>
+    public const double EnrageRatio = 0.5;
 
     // 유산. 멸망한 사회의 수치가 높았던 만큼 다음 세대 대표자가 뛰어나다.
     /// <summary>수치가 이 인구 규모에서의 평범한 값과 같으면 다음 대표자의 능력이 LegacyWeight만큼 오른다.</summary>
     public const double LegacyReferencePopulation = 2000;
-    public const double LegacyWeight = 0.6;
+    public const double LegacyWeight = 0.35;
     /// <summary>다시 멸망할 때 이전 유산이 남는 비율. 새 유산과 비교해 큰 쪽을 쓴다.</summary>
     public const double LegacyCarry = 0.5;
 }

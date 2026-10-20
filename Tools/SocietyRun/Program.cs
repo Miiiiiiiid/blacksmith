@@ -41,6 +41,22 @@ foreach (var bonus in new[] { 0.5, 1.0, 1.5, 2, 3 })
     report.AppendLine($"{bonus,4}배  {100.0 * won.Count / seeds,7:0}%  {gens,22}  {sims.Average(r => r.State.Collapses),14:0.0}  {clean,14:0}%");
 }
 
+report.AppendLine();
+report.AppendLine($"선제 일격 (주인공 없음 사회 + 한 방의 힘. 마왕 첫 체력 {SocietyRules.BossHealth:0} 기준)");
+report.AppendLine("한 방의 힘   토벌 비율  토벌까지 세대(중간/최대)  완전 몰락(평균)");
+foreach (var ratio in new[] { 0.0, 0.25, 0.5, 1.0, 1.5, 3.0 })
+{
+    var sims = Enumerable.Range(1, seeds).Select(seed =>
+    {
+        var sim = new SocietySimulation(seed) { FirstStrikePower = ratio * SocietyRules.BossHealth };
+        sim.Run(maxGenerations);
+        return sim;
+    }).ToList();
+    var won = sims.Where(r => r.State.Won).ToList();
+    var gens = won.Count == 0 ? "-" : $"{Median(won.Select(r => (double)r.State.History.Count)):0}/{won.Max(r => r.State.History.Count)}";
+    report.AppendLine($"{ratio * SocietyRules.BossHealth,10:0}  {100.0 * won.Count / seeds,8:0}%  {gens,22}  {sims.Average(r => r.State.Collapses),14:0.0}");
+}
+
 var runs = RunAll(1);
 var all = runs.SelectMany(r => r.State.History).ToList();
 report.AppendLine();

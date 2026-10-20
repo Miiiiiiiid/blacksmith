@@ -95,6 +95,23 @@ public class SocietyTests
         Assert.NotEmpty(sim.State.Legacy);
     }
 
+    [Fact]
+    public void A_first_strike_that_reaches_full_health_ends_it_in_one_blow()
+    {
+        var sim = new SocietySimulation(6) { FirstStrikePower = 1e9 };
+        sim.RunGeneration();
+        Assert.True(sim.State.Won);
+        Assert.Contains(sim.State.Chronicle, e => e.Text.Contains("한 방에"));
+    }
+
+    [Fact]
+    public void A_first_strike_that_fails_enrages_the_boss()
+    {
+        var sim = new SocietySimulation(6) { FirstStrikePower = 1 };
+        sim.RunGeneration();
+        Assert.Contains(sim.State.Chronicle, e => e.Text.Contains("격노"));
+    }
+
     private sealed class HistoryComparer : IEqualityComparer<GenerationSummary>
     {
         public bool Equals(GenerationSummary? x, GenerationSummary? y) =>

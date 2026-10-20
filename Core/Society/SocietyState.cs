@@ -9,7 +9,7 @@ public enum Stage { Remnant, Town, City, Nation }
 /// <summary>마왕이 깨어났을 때의 결과.</summary>
 public enum InvasionOutcome
 {
-    /// <summary>막아내고, 물러나는 마왕을 공격대가 쓰러뜨렸다.</summary>
+    /// <summary>막아내고, 물러나는 마왕을 공격대가 쓰러뜨렸다. 또는 선제 일격 한 방에 쓰러뜨렸다.</summary>
     Victory,
     /// <summary>막아냈지만 공격대가 마왕을 죽이지 못했다. 입힌 피해만큼 다음 마왕이 약해진다.</summary>
     Repelled,
